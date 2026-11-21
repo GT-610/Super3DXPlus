@@ -23,6 +23,7 @@ Set as environment variables (they do nothing unset, and silence the sound unles
 | `MT3DX_GPUTIME=1` | twice a second in a race a glFinish and how long the GPU took to catch up, with the speed and the radial blur; `MT3DX_FINISH=1` waits for the swap (it made things worse) |
 | `MT3DX_LEAVE_AFTER=n` | leave a race for the menus after n seconds, as the pause menu's YES: several races in one run with `MT3DX_SCRIPT="0:@OK+;0:@OK+;..."` |
 | `MT3DX_SHOT_BURST=<s>:<n>` | save n frames in a row from second s as `burst_<k>.ppm` (how motion looks frame to frame) |
+| `MT3DX_CAMTOGGLE=<n>` | presses the camera key at the race's frame n (with `MT3DX_INTERP_LOG` to see the view change frame by frame) |
 | `MT3DX_FAKE_AMD=1` | (Windows) act as if the card were an AMD one: the player starts again on ANGLE, and the new log (the old one is `log-prev.txt`) says "ANGLE chosen automatically" |
 | `MT3DX_NOREADY=1` | a `MT3DX_VSAUTO=join` player does not click READY |
 | `MT3DX_CALLTEST=km` | show the "Remaining km" callout (3 or 5) at a race's start and again every 4 s |
