@@ -337,14 +337,22 @@ def copy_runtime(ctx):
     def same(a, b):
         return os.path.normcase(os.path.realpath(a)) == os.path.normcase(os.path.realpath(b))
 
-    shutil.copytree(os.path.join(src, "cutin"), os.path.join(data, "cutin"), dirs_exist_ok=True)
+    def copy_over(a, b):
+        """a plain copy that takes the content only: a dump of read-only files (from a disc, an image, a zip) would otherwise make read-only copies,
+        and the second run of the setup could not write over them (Windows: Permission denied, the 'runtime-files' step stopping)"""
+        if os.path.lexists(b):
+            os.chmod(b, 0o666)
+        shutil.copyfile(a, b)
+        return b
+
+    shutil.copytree(os.path.join(src, "cutin"), os.path.join(data, "cutin"), dirs_exist_ok=True, copy_function=copy_over)
     for f in os.listdir(os.path.join(src, "carconfig")):
         if f.startswith("ytConfig") and f.endswith(".txt"):
             a, b = os.path.join(src, "carconfig", f), os.path.join(data, "carconfig", f)
             if not same(a, b):
-                shutil.copyfile(a, b)
+                copy_over(a, b)
     for sub in ("table", "trail"):
-        shutil.copytree(os.path.join(src, "rtmovie", sub), os.path.join(data, "rtmovie", sub), dirs_exist_ok=True)
+        shutil.copytree(os.path.join(src, "rtmovie", sub), os.path.join(data, "rtmovie", sub), dirs_exist_ok=True, copy_function=copy_over)
 
 
 def prepare_sound(ctx):
