@@ -1489,7 +1489,10 @@ static void draw_vs_last(const car_state *car, int story) {
   }
   if (last_t0 < 0) last_t0 = (long)car->lamp_tick;
   const int t = (int)((long)car->lamp_tick - last_t0);
-  if (t / 60 != last_alarm) last_alarm = t / 60, snd_menu(SND_TIME_COUNT); /* (ti_count each second) */
+  if (t / 60 != last_alarm) {
+    last_alarm = t / 60, snd_menu(SND_TIME_COUNT); /* (ti_count each second) */
+    if (!story) fprintf(stderr, "versus alarm: tick %u t %d rank %d lead %.0f m\n", car->lamp_tick, t, r->vs_rank, (double)lead);
+  }
   const int m = (int)lead;
   anm_swap sw[2] = { { anm_sprite(first ? T_LAST_SAIGO : T_LAST_TONIKAKU), uv(first ? UV_LAST_CAUGHT : UV_LAST_KEEP) },
                      { anm_sprite(first ? T_LAST_MADE : T_LAST_RIVAL), uv(first ? UV_LAST_TILL : UV_LAST_UNTIL) } };
@@ -2922,7 +2925,8 @@ void hud_draw(const hud_state *h, const car_state *car, const car_input *in, flo
   draw_ten(car);
   if (consoles && ta_story && ten_level < 0) {
     draw_story_info(car);
-    draw_vs_last(car, 1); /* (the last stretch's call in a story race too: issue 11) */
+    if (!vs_n) draw_vs_last(car, 1); /* (the last stretch's call in a story race too, issue 11; a versus uses the story's console and has its own call, in draw_vs: both drew each frame, sharing one
+                                      * timer, so the alarm sounded every frame and "Keep going!" and "Don't get caught!" showed together for every machine not in front) */
   }
   if (consoles) draw_vs(car);
   if (consoles && ten_level < 0) draw_remain_call(car);

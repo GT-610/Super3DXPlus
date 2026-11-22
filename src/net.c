@@ -72,13 +72,13 @@ static struct {
   double due;
 } Q[LAGQ];
 static int q_head, q_n;
-static double lag_ms, lag_jit, lag_loss;
+static double lag_ms, lag_jit, lag_loss, lag_stall, stall_until, stall_next; /* (the fourth number: a stall of up to that many ms every 2 to 6 s, what comes in then held and let out together, as a bad Wi-Fi does) */
 static int lag_init;
 static void lag_setup(void) {
   if (lag_init) return;
   lag_init = 1;
   const char *e = getenv("MT3DX_NET_LAG");
-  if (e) sscanf(e, "%lf,%lf,%lf", &lag_ms, &lag_jit, &lag_loss);
+  if (e) sscanf(e, "%lf,%lf,%lf,%lf", &lag_ms, &lag_jit, &lag_loss, &lag_stall);
   if (lag_ms > 0 || lag_loss > 0) fprintf(stderr, "versus net: artificial lag %.0f ms +-%.0f, loss %.0f%% of what this machine receives\n", lag_ms, lag_jit, lag_loss);
 }
 
@@ -170,8 +170,12 @@ static int rx_raw(unsigned char *b, int max) {
 static int rx(unsigned char *b, int max) {
   if (!net_fd_ok(N.fd)) return 0;
   lag_setup();
-  if (lag_ms <= 0 && lag_loss <= 0) return rx_raw(b, max);
+  if (lag_ms <= 0 && lag_loss <= 0 && lag_stall <= 0) return rx_raw(b, max);
   double t = mono();
+  if (lag_stall > 0 && t >= stall_next) {
+    stall_until = t + lag_stall * 1e-3 * (0.3 + 0.7 * (double)(rand() % 1000) / 1000.0);
+    stall_next = stall_until + 2.0 + 4.0 * (double)(rand() % 1000) / 1000.0;
+  }
   unsigned char tmp[2048];
   for (int n; (n = rx_raw(tmp, sizeof tmp)) > 0;) {
     if (lag_loss > 0 && (double)(rand() % 1000) < lag_loss * 10.0) continue;
@@ -180,6 +184,7 @@ static int rx(unsigned char *b, int max) {
     memcpy(Q[at].b, tmp, (size_t)n);
     Q[at].n = n;
     Q[at].due = t + (lag_ms + (lag_jit > 0 ? (double)(rand() % 2001 - 1000) / 1000.0 * lag_jit : 0.0)) * 1e-3;
+    if (Q[at].due < stall_until) Q[at].due = stall_until + (double)(rand() % 100) * 1e-4; /* (held through the stall, then out together) */
   }
   for (int i = 0; i < q_n; ++i) { /* (the first that is due: a jitter can put a later one first) */
     int at = (q_head + i) % LAGQ;

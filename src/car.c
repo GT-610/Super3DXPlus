@@ -396,7 +396,7 @@ static void lx_reset(void) {
  * counter less the packet's: the clocks are locked to the host's, so that is the delay), from the packet as it came (rc_link_rx), not by Compensate's
  * own estimate of the delay (half the round trip from acks, which measured 1.5 m out at 70 m/s where this is 4 cm out). The velocity and acceleration
  * stay the packet's: the hit uses them. */
-static int lx_ovr_n;
+static int lx_ovr_n, lx_skipped; /* (the packets Compensate was left to: too old, or from too far ahead) */
 /* the other cars' angles (CEuler: three 16-bit angles, 65536 to a turn): their rate per frame from the packets (sp_look), and the prediction of the turn by the
  * packet's age (lx_override); MT3DX_ANG=0 turns the prediction off */
 #define AN_RATE_MAX 4096.0f /* 22 degrees a frame */
@@ -527,11 +527,45 @@ static void lx_override(void) {
     if (pcb < 0 || pcb >= CAR_LINK_MACHINES || !VA(e + 0x290)[0]) continue;
     uint32_t rp = rc_link_rx + LINK_BUF * (uint32_t)pcb, count = M32(rp + LX_COUNT);
     float t = (float)(int32_t)(ncnt - count) * (1.0f / 60.0f);
-    if (!count || t < 0.0f || t > 0.5f) continue;
+    /* a packet from a machine whose frame counter is ahead of this one's (the clocks are only held to within a few frames of the host's, so two clients differ by that
+     * and a jittery link swings it) has a negative age: its car is put back along its velocity, not left to Compensate's own estimate, which is metres out (a rival
+     * that jumped back and forth, 4-way versus). MT3DX_NEGAGE=0 restores the old skip, for a comparison */
+    static int neg_ok = -1;
+    if (neg_ok < 0) neg_ok = getenv("MT3DX_NEGAGE") ? atoi(getenv("MT3DX_NEGAGE")) != 0 : 1;
+    /* (up to a second old: past half a second Compensate was left to, and its car stood still then jumped a dozen metres when the packets came back after a stall) */
+    if (!count || t > 1.0f || t < (neg_ok ? -0.25f : 0.0f)) {
+      lx_skipped++;
+      continue;
+    }
     if (lx_ovr_n < 3 || (lx_ovr_n % 600) == 0) NETLOG("versus predict: override pcb %d count %u ncnt %u age %.1f ms: Compensate left %.0f %.0f %.0f, packet %.0f %.0f %.0f, vel %.0f %.0f %.0f\n", pcb, count, ncnt, (double)t * 1000.0, (double)MF(e + LX_POS), (double)MF(e + LX_POS + 4), (double)MF(e + LX_POS + 8), (double)MF(rp + LX_POS), (double)MF(rp + LX_POS + 4), (double)MF(rp + LX_POS + 8), (double)MF(rp + LX_VEL), (double)MF(rp + LX_VEL + 4), (double)MF(rp + LX_VEL + 8));
     lx_ovr_n++;
-    for (int j = 0; j < 3; ++j) WF(e + LX_POS + 4u * (uint32_t)j, MF(rp + LX_POS + 4u * (uint32_t)j) + (MF(rp + LX_VEL + 4u * (uint32_t)j) + 0.5f * MF(rp + LX_ACC + 4u * (uint32_t)j) * t) * t);
-    WF(e + 0x240u, MF(rp + 0x240u) + MF(rp + 0x244u) * t); /* (the odometer: the speed times it) */
+    { /* the position; a new packet after a gap (a stall, a lost run of them) puts the car where it really is, metres from where the last ones had it going: that is shown
+       * as a car that jumps and comes back. So the position goes on from last step's, by the packet's velocity, and is drawn toward the packet's prediction by a fifth of what
+       * is between them each step (a jump of a metre is gone in about a tenth of a second; past SM_SNAP, or a step that is not the next one, it is a teleport and not smoothed).
+       * MT3DX_SMOOTH=0 turns it off, for a comparison. */
+      static float sm_out[CAR_LINK_MACHINES][3];
+      static uint32_t sm_cnt[CAR_LINK_MACHINES];
+      static int sm_on = -1;
+      if (sm_on < 0) sm_on = getenv("MT3DX_SMOOTH") ? atoi(getenv("MT3DX_SMOOTH")) != 0 : 1;
+      float raw[3], out[3], err2 = 0.0f;
+      const int next = sm_on && sm_cnt[pcb] == ncnt - 1u;
+      for (int j = 0; j < 3; ++j) {
+        const float v = MF(rp + LX_VEL + 4u * (uint32_t)j);
+        const float ta = t > 0.25f ? 0.25f : t; /* (the acceleration is carried on for a quarter of a second at most: a stale packet's would run away) */
+        raw[j] = MF(rp + LX_POS + 4u * (uint32_t)j) + v * t + MF(rp + LX_ACC + 4u * (uint32_t)j) * (0.5f * ta * ta + ta * (t - ta));
+        const float cont = sm_out[pcb][j] + v * (1.0f / 60.0f); /* (where it would be had last step's gone on) */
+        out[j] = next ? cont + 0.2f * (raw[j] - cont) : raw[j];
+        err2 += (raw[j] - cont) * (raw[j] - cont);
+      }
+      const int snap = !next || err2 > 6000.0f * 6000.0f; /* (6 m) */
+      for (int j = 0; j < 3; ++j) {
+        if (snap) out[j] = raw[j];
+        sm_out[pcb][j] = out[j];
+        WF(e + LX_POS + 4u * (uint32_t)j, out[j]);
+      }
+      sm_cnt[pcb] = ncnt;
+    }
+    WF(e + 0x240u,MF(rp + 0x240u) + MF(rp + 0x244u) * t); /* (the odometer: the speed times it) */
     rx_apply(pcb, e, rp, count, ncnt);
     if (an_on && an_ok[pcb]) { /* the angles turned on by the packet's age at the rate they were turning */
       float age = (float)(int32_t)(ncnt - count);
@@ -558,7 +592,7 @@ static void lx_record(void) {
     uint32_t rp = rc_link_rx + LINK_BUF * (uint32_t)pcb;
     uint32_t count = M32(rp + LX_COUNT);
     float t = (float)(int32_t)(ncnt - count) * (1.0f / 60.0f);
-    if (t < 0.0f || t > 1.0f) {
+    if (t < -0.25f || t > 1.0f) {
       lx_dbg_skip[i]++;
       continue;
     }
@@ -573,6 +607,8 @@ static void lx_record(void) {
   }
   if (++lx_frames < 120) return;
   lx_frames = 0;
+  if (lx_skipped) NETLOG("versus predict: %d machine-steps left to Compensate's own estimate (age under -0.25 s or over 1 s, or negative with MT3DX_NEGAGE=0) in the last 2 s\n", lx_skipped);
+  lx_skipped = 0;
   for (int k = 0; k < CAR_LINK_MACHINES; ++k) {
     if (!lx_err[k].n) continue;
     double n = (double)lx_err[k].n;
@@ -1122,6 +1158,12 @@ static void read_race(car_race *r) {
       if (gone && lx) W8(lx + 8u, 0); /* (a machine that left: off the road for the game too, out of the ranking) */
       r->vs_on[i] = lx && i < P.vs_race && !gone;
       if (!r->vs_on[i]) continue;
+      { /* (measuring: a rival that goes off the road and on again changes the ranking and the last stretch's call with it) */
+        static int was_on[CAR_RIVALS] = { -1, -1, -1 }, flips[CAR_RIVALS];
+        int on = M8(lx + 8u) != 0;
+        if (was_on[i] >= 0 && on != was_on[i] && flips[i]++ < 40) NETLOG("versus rival %d on the road: %d -> %d (its odometer %.0f m, mine %.0f m)\n", i, was_on[i], on, (double)(MF(M32(lx + 0x240u) + 0x30u) * 0.001f), (double)(odo * 0.001f));
+        was_on[i] = on;
+      }
       float d = odo - (M8(lx + 8u) ? MF(M32(lx + 0x240u) + 0x30u) : 0.0f);
       r->vs_gap[i] = d * 0.001f;
       if (d < 0.0f) r->vs_rank++;
@@ -1194,12 +1236,64 @@ const char *car_jct_block_name(int id) {
  * other machines' share (CLxOtherGen: they drive it, it comes in their packets, this machine
  * hits it), as CSeq::GetInfoOtherCarDisp asks one then the other. */
 static void read_traffic(car_state *c) {
+  /* In a versus the other machines' share of the traffic comes in their packets, and the cars of it stand still while the packets are held up (a stall, a run of lost ones) and then
+   * jump metres to where they are, a stream of cars going stop and go. What is drawn goes on at the speed they had while they stand, and is drawn toward where they are, a quarter of the
+   * way a step, when the packets come back (the hit code is not touched: this is the picture only). MT3DX_TSMOOTH=0 turns it off, for a comparison. Display units, 0.1 m. */
+  static struct {
+    float src[2], out[2], vel[2];
+    int frozen;
+  } T[CAR_TRAFFIC];
+  static unsigned tseen, tnow; /* (the slots shown on the last step, on this one) */
+  static int jumps, shown_jumps, steps, logged, ts_on = -1;
+  static float jmax;
+  if (ts_on < 0) ts_on = getenv("MT3DX_TSMOOTH") ? atoi(getenv("MT3DX_TSMOOTH")) != 0 : 1;
   c->n_traffic = 0;
+  tnow = 0;
   for (int i = 0; P.gen && i < CAR_TRAFFIC; i++) {
     if (!(call(f_89825a8, 3, (uint32_t)(TRAFFIC_SLOT0 + i), P.disp, 0u) & 0xff)) continue;
     car_traffic *t = &c->traffic[c->n_traffic++];
     t->model = P.traffic_model[i];
     memcpy(t->body, VA(P.disp + 4), sizeof t->body);
+    if (!P.vs_race) continue;
+    const float sx = t->body[12], sz = t->body[14];
+    float ox = sx, oz = sz;
+    if (tseen >> i & 1u) {
+      const float dx = sx - T[i].src[0], dz = sz - T[i].src[1], d = sqrtf(dx * dx + dz * dz), v = sqrtf(T[i].vel[0] * T[i].vel[0] + T[i].vel[1] * T[i].vel[1]);
+      if (d > 30.0f) { /* (3 m in a step: counted, as the source's own) */
+        jumps++;
+        if (d > jmax) jmax = d;
+        if (logged++ < 80) NETLOG("versus traffic jump: slot %d moved %.1f m in one step (now %.0f %.0f)\n", i, (double)d * 0.1, (double)sx, (double)sz);
+      }
+      if (ts_on) {
+        const float cx = T[i].out[0] + T[i].vel[0], cz = T[i].out[1] + T[i].vel[1]; /* (where it is drawn, gone on by its speed) */
+        if (v > 2.0f && d < 0.15f * v && T[i].frozen < 24) { /* (it moved less than a seventh of what it does: held, not stopped; at most 0.4 s of that) */
+          ox = cx, oz = cz;
+          T[i].frozen++;
+          T[i].vel[0] *= 0.98f, T[i].vel[1] *= 0.98f;
+        } else {
+          if (!T[i].frozen && d < 4.0f * v + 20.0f) T[i].vel[0] += 0.3f * (dx - T[i].vel[0]), T[i].vel[1] += 0.3f * (dz - T[i].vel[1]); /* (its speed, as it moves ordinarily) */
+          const float ex = sx - cx, ez = sz - cz;
+          if (ex * ex + ez * ez < 150.0f * 150.0f) ox = cx + 0.25f * ex, oz = cz + 0.25f * ez; /* (past 15 m it is another car, or a stall too long to bridge: no blend) */
+          T[i].frozen = 0;
+        }
+        const float ddx = ox - T[i].out[0], ddz = oz - T[i].out[1];
+        if (sqrtf(ddx * ddx + ddz * ddz) > 30.0f) shown_jumps++;
+        t->body[12] = ox, t->body[14] = oz;
+      } else {
+        T[i].vel[0] = dx, T[i].vel[1] = dz;
+      }
+    } else {
+      T[i].vel[0] = T[i].vel[1] = 0.0f, T[i].frozen = 0;
+    }
+    T[i].src[0] = sx, T[i].src[1] = sz, T[i].out[0] = ox, T[i].out[1] = oz;
+    tnow |= 1u << i;
+  }
+  if (P.vs_race) {
+    tseen = tnow;
+    if (++steps >= 600) {
+      if (jumps || shown_jumps) NETLOG("versus traffic: %d source jumps, %d drawn jumps (over 3 m in a step) in 600 steps; the largest source jump %.1f m\n", jumps, shown_jumps, (double)jmax * 0.1);
+      steps = jumps = shown_jumps = 0, jmax = 0;
+    }
   }
 }
 
@@ -1216,6 +1310,28 @@ static void read_rival(car_state *c) {
       c->rival_brake[i] = M8(P.disp + 0x144);
       c->rival_spot[i] = M8(P.disp + 0x146) == 1;
       if (P.vs_race && i < P.vs_n) c->rival_spot[i] = !net_flash_of(P.vs[i].pcb); /* (a machine's own headlights as it sends them: the rival code shows them always) */
+      if (P.vs_race && i < P.vs_n) { /* (measuring: the shown car's step against the last one's: a jerk of more than 0.6 m is a jump the player sees) */
+        static float rp_[CAR_RIVALS][3], rd_[CAR_RIVALS][3];
+        static int rok[CAR_RIVALS], rlog_, rjumps[CAR_RIVALS], rsteps, rtotal;
+        static float rmax[CAR_RIVALS];
+        const float *b = c->rival_body[i];
+        float d[3] = { b[12] - rp_[i][0], 0.0f, b[14] - rp_[i][2] };
+        if (rok[i] == 2) {
+          float jx = d[0] - rd_[i][0], jz = d[2] - rd_[i][2], j = sqrtf(jx * jx + jz * jz);
+          if (j > 5.0f && rtotal > 900) {
+            rjumps[i]++;
+            if (j > rmax[i]) rmax[i] = j;
+            if (rlog_++ < 100) NETLOG("versus rival jump: pcb %d jerked %.2f m in one step (step %.2f, was %.2f)\n", P.vs[i].pcb, (double)j * 0.1, (double)sqrtf(d[0] * d[0] + d[2] * d[2]) * 0.1, (double)sqrtf(rd_[i][0] * rd_[i][0] + rd_[i][2] * rd_[i][2]));
+          }
+        }
+        rd_[i][0] = d[0], rd_[i][2] = d[2], rp_[i][0] = b[12], rp_[i][2] = b[14];
+        if (rok[i] < 2) rok[i]++;
+        if (i == 0 && (rtotal++, ++rsteps >= 600)) {
+          for (int k = 0; k < CAR_RIVALS; ++k)
+            if (rjumps[k]) NETLOG("versus rival: slot %d: %d jerks over 600 steps, the largest %.2f m\n", k, rjumps[k], (double)rmax[k] * 0.1);
+          memset(rjumps, 0, sizeof rjumps), memset(rmax, 0, sizeof rmax), rsteps = 0;
+        }
+      }
     }
   }
 }

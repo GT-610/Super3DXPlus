@@ -355,21 +355,31 @@ def copy_runtime(ctx):
         shutil.copytree(os.path.join(src, "rtmovie", sub), os.path.join(data, "rtmovie", sub), dirs_exist_ok=True, copy_function=copy_over)
 
 
+def copy_wav(a, b):
+    """copy a sound; the dump may already sit in the game folder (its data folder is this one), then a and b are the same file and the copy is skipped
+    (copying a file onto itself stops the setup: 'are the same file', issue 42)"""
+    if os.path.lexists(b):
+        if os.path.normcase(os.path.realpath(a)) == os.path.normcase(os.path.realpath(b)):
+            return
+        os.chmod(b, 0o666)
+    shutil.copyfile(a, b)
+
+
 def prepare_sound(ctx):
     src = os.path.join(ctx.d, "sound")
     out = os.path.join(ROOT, "data", "sound")
     os.makedirs(os.path.join(out, "engine"), exist_ok=True)
     for f in os.listdir(os.path.join(src, "engine")):
         if f.endswith(".wav"):
-            shutil.copyfile(os.path.join(src, "engine", f), os.path.join(out, "engine", f))
+            copy_wav(os.path.join(src, "engine", f), os.path.join(out, "engine", f))
     race = ("slip wall crash1 crash4 valb1 valb2 valb3 gyap phone2 turbin1 turbin2 turbin3 air1 backfire1 backfire2").split()
     system = ("cursor select cancel gamestart ti_count ti_count2 turning6 finish1 turning turning2 turning3 start321 start_go finish2 cutin2 "
               "tuning_bar result2 result_pass approach2 approach3 turning3_cutin door_open door_close engine_start rybal_intro parts_equip tuning "
               "levelup jack_up jack_down tuning1 tuning2 parts_comp rank win win_bigstar approach5 approach4 approach6 turning5 odo_count").split()
     for f in race:
-        shutil.copyfile(os.path.join(src, "race_se", f + ".wav"), os.path.join(out, f + ".wav"))
+        copy_wav(os.path.join(src, "race_se", f + ".wav"), os.path.join(out, f + ".wav"))
     for f in system:
-        shutil.copyfile(os.path.join(src, "system_se", f + ".wav"), os.path.join(out, f + ".wav"))
+        copy_wav(os.path.join(src, "system_se", f + ".wav"), os.path.join(out, f + ".wav"))
 
 
 BGM = ("maxi3plus/wm3DX_P_sys_01_ent maxi3plus/wm3DX_P_sys_02_sel maxi3/sys_04 maxi3/sys_05 maxi3plus/wm3DX_P_race_01 maxi3plus/wm3DX_P_race_02 "

@@ -125,7 +125,10 @@ void ffb_get(ffb_out *o) {
     o->spring = 0.0f;
     return;
   }
-  if (!F.running) return;
+  if (!F.running) { /* the menus, the pause, the countdown: the driver's own centring is off (wheel.c), so a light spring and damper keep a direct-drive wheel from spinning free (issue 40) */
+    o->spring = 0.25f, o->damper = 0.35f;
+    return;
+  }
   const float inv = F.v[FFB_INVERT] ? -1.0f : 1.0f;
   /* the steering force: the response curve first (a small pull of the tyres made larger), then the strength, then the faintest force the driver lets through */
   float s = F.sat;

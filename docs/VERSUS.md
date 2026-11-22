@@ -93,8 +93,11 @@ somewhere (`2> log.txt`) or with `MT3DX_STDERR=1` set it leaves it alone. The ve
 - `versus predict:` every 2 s: the position error of what the game used, of the raw packet and of the plain formula, against where the car really was; and
   the error by the frames since a contact. `versus react`, `versus own jump`, `versus spike`, `versus calib`, `versus trace`, `versus contact`, `versus near`:
   the contact and turn events, each capped.
-- `MT3DX_NET_LAG=<ms>[,<jitter ms>[,<loss %>]]` makes this machine delay (and lose) everything it receives, to try a bad connection on a LAN; set it on both
-  machines for a lag each way. On the Pi: `a local dev script on|off`; the Pi's car can drive itself for a lone tester with `a local dev script on|off`
+- `MT3DX_NET_LAG=<ms>[,<jitter ms>[,<loss %>[,<stall ms>]]]` makes this machine delay (and lose) everything it receives, to try a bad connection on a LAN; the fourth number holds
+  everything for up to that long every 2 to 6 s and lets it out together, as a bad Wi-Fi does; set it on both
+  machines for a lag each way. Four players on one PC: four copies of the player, one hosting (`MT3DX_VSAUTO=host:4`) and three joining (`join`), each `MT3DX_AUTODRIVE=1` at a different
+  `MT3DX_AUTODRIVE_KMH`, `MT3DX_NET_LAG=35,20,2,350` on all four. The log then says `versus rival: ... jerks` (another machine's car drawn more than half a metre off its step) and
+  `versus traffic: ... drawn jumps` every 10 s; `MT3DX_SMOOTH=0` (the rivals' drawn position), `MT3DX_TSMOOTH=0` (the traffic's) and `MT3DX_NEGAGE=0` give the old behaviour for a comparison. On the Pi: `a local dev script on|off`; the Pi's car can drive itself for a lone tester with `a local dev script on|off`
   (the arcade's pilot steers, `MT3DX_AUTODRIVE_KMH` caps the speed); `a local dev script KEY=VAL ...` sets other variables (`MT3DX_NETLOG=1`).
 
 ## The race as the arcade runs it (what the console shows)
