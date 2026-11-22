@@ -5348,6 +5348,11 @@ void app_frame(float dt) {
   for (int i = 0; i < steps; ++i) {
     if (G.interp && i == steps - 1) pose_get(&G.car, &pose_prev), pose_prev_ok = 1; /* (the state the last step starts from) */
     if (G.ten_white && ++G.ten_white > 1 + TEN_WHITE_HOLD + TEN_WHITE_FADE) G.ten_white = 0;
+    { /* test: MT3DX_WARPTEST=n puts the car back at its first point at the race's frame n, at its speed (up to 120 km/h), as a cutscene's restart does: the gear must stay */
+      static int warp = -2;
+      if (warp == -2) warp = getenv("MT3DX_WARPTEST") ? atoi(getenv("MT3DX_WARPTEST")) : -1;
+      if (warp > 0 && G.race_frames == warp && i == 0) fprintf(stderr, "warp test: car_reset at frame %d\n", warp), car_reset(&G.car);
+    }
     car_update(&G.car, &in);
     pend_up = pend_down = pend_gear = 0;
     haptic_set_levels(G.menu.rum);

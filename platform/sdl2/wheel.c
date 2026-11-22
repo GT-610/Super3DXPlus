@@ -33,6 +33,7 @@ static struct {
   Uint32 reopened_at;      /* when the device was last opened again by the watchdog */
   Uint32 restart_t0;       /* the window the restarts are counted in */
   int restarts;
+  int status_off;          /* the driver says its effects stopped while they run (a Fanatec does): its answer is not asked for again, and the device is not opened again for it */
   int seen;                /* bit i: force i has been seen playing (a driver that never says so is not asked again) */
   Uint32 reopen_t0;        /* the minute the reopenings are counted in */
   int reopens;
@@ -143,7 +144,7 @@ static void close_wheel(void) {
   W.fx_const = W.fx_spring = W.fx_damper = W.fx_sine = -1;
   W.playing = 0;
   W.s_force = W.s_spring = W.s_damper = W.s_vib = W.s_hz = 0, W.s_gain = 0; /* (new effects start at nothing, so what is sent next is a change) */
-  W.failed = 0, W.seen = 0;
+  W.failed = 0, W.seen = 0, W.status_off = 0;
 }
 
 static void cartesian(SDL_HapticDirection *d) {
@@ -211,7 +212,9 @@ static void diag_end(void) {
 static SDL_Haptic *haptic_by_name(const char *jname) {
   if (!jname) return NULL;
   const int nh = SDL_NumHaptics();
-  for (int i = 0; i < nh; ++i) {
+  /* from the last: every open of a device sends it a reset, and a wheel listed more than once (a Fanatec's two interfaces) had its first two entries, the ones that failed, reset
+   * before the third opened (issue 40: the log's "Resetting device"); the last is the one that has opened in the reports */
+  for (int i = nh - 1; i >= 0; --i) {
     const char *hn = SDL_HapticName(i);
     if (hn && (!strcmp(hn, jname) || strstr(hn, jname) || strstr(jname, hn))) {
       SDL_Haptic *h = SDL_HapticOpen(i);
@@ -392,8 +395,8 @@ static void reopen(const char *why) {
   if (now - W.reopened_at < 1000) return;
   W.reopened_at = now;
   if (now - W.reopen_t0 > 60000) W.reopen_t0 = now, W.reopens = 0;
-  if (++W.reopens > 5) { /* (it is not helping: leave it to the settings, and say so once) */
-    if (W.reopens == 6) rlog("%s: the wheel was opened again 5 times in a minute and keeps failing; not trying any more until it is chosen again", why);
+  if (++W.reopens > 2) { /* (each opening resets the wheel, so it is tried twice a minute at most: a wheel that refuses its updates was reset into a limp one by five in a minute, issue 40) */ /* (it is not helping: leave it to the settings, and say so once) */
+    if (W.reopens == 3) rlog("%s: the wheel was opened again 2 times in a minute and keeps failing; not trying any more until it is chosen again", why);
     W.failed = 0;
     return;
   }
@@ -418,7 +421,7 @@ static void watchdog(void) {
     reopen("a force update failed");
     return;
   }
-  if (!(W.caps & SDL_HAPTIC_STATUS)) return;
+  if (!(W.caps & SDL_HAPTIC_STATUS) || W.status_off) return;
   const int ids[4] = { W.fx_const, W.fx_spring, W.fx_damper, W.fx_sine };
   for (int i = 0; i < 4; ++i) {
     if (ids[i] < 0) continue;
@@ -430,7 +433,11 @@ static void watchdog(void) {
       rlog("force %d had stopped (%d in 10 s): starting it again", i, W.restarts);
       if (SDL_HapticRunEffect(W.h, ids[i], 1) != 0) rlog("  it would not start: %s", SDL_GetError());
       if (W.restarts >= 3) {
-        reopen("the forces keep stopping");
+        /* Opening the device again resets it (SDL's haptic open sends a reset), and a Fanatec whose status read "stopped" while its forces ran lost its forces for good after the
+         * third time: it felt right in the menu for a few seconds and then spun free (issue 40). The keepalive below sends every effect again twice a second anyway; so the answer
+         * is no longer asked for. */
+        W.status_off = 1;
+        rlog("the driver says force %d stopped %d times in 10 s: its answer is not trusted any more (the forces are sent again twice a second as it is), and the device is not opened again", i, W.restarts);
         return;
       }
     }

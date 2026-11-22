@@ -741,10 +741,16 @@ static int on_other_setup(uint32_t slot, uint32_t type) {
 static void first_frame(car_state *c);
 static int phys_have; /* read_phys has a last frame's velocity to work from */
 
+/* The gear the player was in when a race that is running went back to a countdown (a cutscene of a story or 10-in-a-row race that ends in a rolling start again: the arcade's
+ * transmission goes back to SetFirst's gear, 2nd, and the driver's gear was lost: 4th became 2nd after the scene, issue 41). Kept from the last running step and put back in
+ * the engine (and the manual's lever) for as long as the countdown runs. */
+static struct { int running, keep, active; } GK;
+
 int car_start(car_state *c, int course, int manual, const car_spec *spec) {
   /* a fresh arcade memory image per race, like a fresh boot of CSeq::Init */
   P.ready = 0;
   phys_have = 0;
+  memset(&GK, 0, sizeof GK);
   if (course < 0|| course >= CAR_COURSES || rc_load_image(P.image) != 0) return -1;
   P.course = course;
   P.manual = manual != 0;
@@ -1502,7 +1508,7 @@ void car_reset(car_state *c) {
   if (!P.ready) return;
   c->vel_ok = 0; /* (the warp is no hit) */
   uint32_t slit = P.m + 0x7b4u;
-  float odo = MF(slit + 0x1bc), speed = fminf(fmaxf(c->speed * 1000.0f, 0.0f), WARP_SPEED);
+  float odo = MF(slit + 0x1bc), speed = fminf(fmaxf(c->speed * 1000.0f, 0.0f), getenv("MT3DX_WARPKEEP") ? 1e9f : WARP_SPEED); /* (MT3DX_WARPKEEP: the car's own speed, as a cutscene's restart keeps it) */
   call(f_89c50c0, 4, P.first_pt, slit, fbits(odo), M32(START_OFS + 4));
   call(f_89ba05c, 3, P.m, P.first_pt, fbits(speed));
   if (P.manual) { /* the lever to the gear SetFirstPos chose (CTransmission::SetFirst) */
@@ -1746,7 +1752,39 @@ void car_update(car_state *c, const car_input *in) {
    * driver's lever, the port's own, is still where it was, 5th): the lever's gear is the one that is in once the race runs, so it is the one shown
    * (the display dropped to 2 and jumped back at the start, issue 11) */
   if (P.manual && c->race.countdown > 0.0f && P.lever >= 0 && P.lever != gear - 1) gear = P.lever + 1;
-  if (gear != c->gear && c->gear) c->shift_event = gear > c->gear ? 1 : -1;
+  { /* A cutscene that goes on at the car's speed puts the car back at its first point (CMachine::SetFirstPos), and CTransmission::SetFirst picks the rolling start's gear
+     * for it, 2nd, at whatever speed the car has: the engine over-revs in a "money shift" and the gear shown drops from 4th to 2nd (issue 41). A fall of two gears or more in
+     * one step at a speed that is kept, not a shift the driver asked for (the manual's lever below the new gear, no gear key pressed; the automatic does not skip gears
+     * by itself), is that: the gear it was in is put back. */
+    const int prev_gear = c->gear;
+    if (prev_gear >= 3 && c->race.play_state == 2 && c->race.countdown <= 0.0f && !GK.active && prev_gear - gear >= 2 && fabsf(prev_speed) > 10.0f && fabsf(c->speed) > 0.9f * fabsf(prev_speed) &&
+        (!P.manual || (!in->gear && !in->shift_down && gear - 1 != P.lever))) {
+      fprintf(stderr, "gear: fell from %d to %d in one step at %.0f km/h with no shift asked for (a cutscene's restart): put back\n", prev_gear, gear, (double)fabsf(c->speed) * 3.6);
+      W32(P.m + M_ENGINE + 0x3c, (uint32_t)prev_gear);
+      gear = prev_gear;
+      if (P.manual) P.lever = prev_gear - 1 > P.top_lever ? P.top_lever : prev_gear - 1;
+    }
+  }
+  { /* the gear kept through a restart (see GK) */
+    const int running = c->race.play_state == 2 && c->race.countdown <= 0.0f;
+    if (running) GK.running = 1, GK.keep = gear, GK.active = 0;
+    else if (GK.running && c->race.countdown > 0.0f && c->race.play_state <= 2 && GK.keep >= 1) {
+      GK.running = 0, GK.active = 1;
+      fprintf(stderr, "gear: the race went back to a countdown in gear %d (the engine's now %d, the lever %d): keeping %d\n", GK.keep, gear, P.lever + 1, GK.keep);
+    }
+    if (GK.active) {
+      if (c->race.countdown > 0.0f) {
+        if (gear != GK.keep) W32(P.m + M_ENGINE + 0x3c, (uint32_t)GK.keep), gear = GK.keep;
+        if (P.manual) P.lever = GK.keep - 1 > P.top_lever ? P.top_lever : GK.keep - 1;
+      } else {
+        GK.active = 0;
+      }
+    }
+  }
+  if (gear != c->gear && c->gear) {
+    c->shift_event = gear > c->gear ? 1 : -1;
+    if (getenv("MT3DX_LOG")) fprintf(stderr, "gear: %d -> %d at %.0f km/h (lever %d, play state %d)\n", c->gear, gear, (double)fabsf(c->speed) * 3.6, P.lever + 1, c->race.play_state);
+  }
   c->gear = gear;
 
   /* effect cues: squeal from sideways speed, impact from a sudden loss of speed */
