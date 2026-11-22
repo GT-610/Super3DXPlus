@@ -606,6 +606,12 @@ static int game(void *arg) {
       fprintf(stderr, "display %d Hz\n", mode.refresh_rate);
     }
   }
+  /* test: MT3DX_FAKE_HZ=<n> runs as on an n Hz display without one (swap interval 0, paced in software to n frames a second), to try smooth motion on this machine's 60 Hz screen */
+  static int fake_hz;
+  if (getenv("MT3DX_FAKE_HZ") && atoi(getenv("MT3DX_FAKE_HZ")) > 0) {
+    fake_hz = atoi(getenv("MT3DX_FAKE_HZ")), refresh_hz = fake_hz, interval = 1;
+    fprintf(stderr, "fake display: %d Hz, no vsync\n", fake_hz);
+  }
   app_display_hz((float)refresh_hz);
   /* ANGLE's swap interval 2 on a 120 Hz screen gave a game at 37 fps with 40 ms frames in it (the driver's own: an even 60): its races are smooth-motion races then, one frame a refresh,
    * whatever the SMOOTH MOTION option says; the menus too at an interval of 1 */
@@ -615,7 +621,7 @@ static int game(void *arg) {
     app_force_smooth(1);
     fprintf(stderr, "ANGLE on a %d Hz screen: a frame every refresh, in the menus too, and smooth motion in the races whatever the option says\n", (int)refresh_hz);
   }
-  int sw = SDL_GL_SetSwapInterval(interval);
+  int sw = SDL_GL_SetSwapInterval(fake_hz ? 0 : interval);
   if (sw != 0 && interval != 1) interval = 1, sw = SDL_GL_SetSwapInterval(1);
   fprintf(stderr, "swap interval: asked %d, set %s, now %d\n", interval, sw == 0 ? "ok" : SDL_GetError(), SDL_GL_GetSwapInterval());
   app_save_dir(P.save_dir);
@@ -780,7 +786,7 @@ static int game(void *arg) {
     int smooth = app_smooth(); /* (a race drawn with smooth motion: a frame every refresh of the display, not 60 a second) */
     if (smooth != smooth_now) {
       smooth_now = smooth;
-      SDL_GL_SetSwapInterval(smooth ? 1 : interval);
+      SDL_GL_SetSwapInterval(fake_hz ? 0 : smooth ? 1 : interval);
       fprintf(stderr, "smooth motion %s: swap interval %d\n", smooth ? "on" : "off", smooth ? 1 : interval);
     }
     double p0 = now_s();

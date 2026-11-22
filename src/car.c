@@ -950,7 +950,7 @@ static struct {
 } SK;
 
 void car_shake(int tenths) { shake_tenths = tenths < 0 ? 0 : tenths > 10 ? 10 : tenths; }
-static int shake_slow;
+static int shake_slow, slow_rej, slow_warm; /* (the first-person lock: samples left out in a row, and steps since its rest place was set) */
 void car_shake_slow(int on) { shake_slow = on; } /* (smooth motion's first-person view: the camera's offset and axes follow over about half a second, not a sixth) */
 
 /* the frame the filter works in (rows: its three axes in the world): the car's turn about the up axis, so a corner is not a shake; or, for smooth motion's first-person view,
@@ -964,7 +964,7 @@ static void shake_from(const float in[3], float out[3]) {
 }
 
 static void shake_filter(car_state *c) {
-  if (shake_tenths >= 10) {
+  if (shake_tenths >= 10 || M32(STATE) >= 4) { /* (and no smoothing once the race is over, play states 4 and up: the finish's cameras are the arcade's own moves around the car, and a filter that follows it a fifth of a second late only makes it wobble; issue 41) */
     SK.on = 0;
     return;
   }
@@ -991,11 +991,27 @@ static void shake_filter(car_state *c) {
   /* (a cut, a new view, the first frame: no smoothing across it. A cut is metres: the road's jolts move the roof view's eye a metre or more in a few steps, and a limit
    * relative to the offset (about 3 units) made the filter give up exactly there) */
   if (!SK.on || SK.view != P.view || d > 40.0f * 40.0f || fwd < 0.95f) {
-    SK.on = 1, SK.view = P.view;
+    SK.on = 1, SK.view = P.view, slow_rej = slow_warm = 0;
     memcpy(SK.off, off, sizeof off), memcpy(SK.ax, ax, sizeof ax);
     return;
   }
-  const float a = shake_slow ? 0.03f : 0.1f, s = shake_tenths / 10.0f; /* (a step is 1/60 s: 0.1 of the way is a time constant of about 0.16 s) */
+  float a = shake_slow ? 0.02f : 0.1f; /* (a step is 1/60 s: 0.1 of the way is a time constant of about 0.16 s) */
+  float s = shake_slow ? 0.0f : shake_tenths / 10.0f;
+  if (shake_slow) {
+    /* smooth motion's first-person view: the eye is held on the car's body. The arcade's roof camera is not rigid on it: at the same places of a course (the spawn, a bend) it swings
+     * 2 m or more forward and back of the eye's rest place, over a few steps, which a slow filter only spreads out. So the rest place is learned (slowly, from the samples that are near it)
+     * and the samples far from it are left out; if they stay far (the view really moved) the rest place goes to them after two seconds. */
+    if (d < 25.0f && fwd > 0.998f) {
+      slow_rej = 0;
+    } else {
+      a = 0.0f;
+      if (++slow_rej > 120) {
+        slow_rej = slow_warm = 0;
+        memcpy(SK.off, off, sizeof off), memcpy(SK.ax, ax, sizeof ax);
+        return;
+      }
+    }
+  }
   float o[3], x[3][3];
   for (int k = 0; k < 3; ++k) {
     SK.off[k] += (off[k] - SK.off[k]) * a;

@@ -5767,7 +5767,10 @@ void app_frame(float dt) {
   }
   { /* test: MT3DX_INTERP_LOG=n logs n frames' timing and the drawn car's place, from the race's frame 120 (how evenly it moves) */
     static int lg = -1, lg_from = 120;
-    if (lg < 0) lg = getenv("MT3DX_INTERP_LOG") ? atoi(getenv("MT3DX_INTERP_LOG")) : 0, lg_from = getenv("MT3DX_INTERP_FROM") ? atoi(getenv("MT3DX_INTERP_FROM")) : 120;
+    if (lg < 0) {
+      lg = getenv("MT3DX_INTERP_LOG") ? atoi(getenv("MT3DX_INTERP_LOG")) : 0, lg_from = getenv("MT3DX_INTERP_FROM") ? atoi(getenv("MT3DX_INTERP_FROM")) : 120;
+      if (lg > 0) setvbuf(stderr, NULL, _IOFBF, 1 << 16); /* (an unbuffered stderr to a file took 20 ms a line on Windows: the logged race ran at 40 fps and was no test of a fast display) */
+    }
     if (lg > 0 && G.race_frames > lg_from && G.race_frames <= lg_from + lg) {
       float eye[3]; /* (the eye the drawn view matrix really has, and how far it is from the drawn car: it must not change between frames) */
       for (int j = 0; j < 3; ++j) eye[j] = -(c->cam_view[4 * j] * c->cam_view[12] + c->cam_view[4 * j + 1] * c->cam_view[13] + c->cam_view[4 * j + 2] * c->cam_view[14]);
