@@ -1838,6 +1838,9 @@ void app_window_row(int on) { G.menu.win_row = on != 0; }
 void app_firewall_row(int on) { G.menu.fw_row = on != 0; }
 void app_frame_lock_row(int on) { G.menu.fps_row = on != 0; }
 int app_frame_lock(void) { return G.menu.fps_row && G.menu.lock60; }
+/* the refresh rate the Android player asks the system for: 60 with the lock; with smooth motion on and no lock a high one, since a phone that is left to choose often holds a game to 60 Hz
+ * whatever its screen can do (a "High" setting is only a ceiling, and some makers keep games to 60) and smooth motion is then never chosen (issue 36); 0 leaves it to the system */
+int app_frame_pref(void) { return !G.menu.fps_row ? 0 : G.menu.lock60 ? 60 : G.menu.smooth_on ? 120 : 0; }
 int app_black_level(void) { return G.menu.black_lv; }
 /* the pad's rumble now (haptic.c): nothing outside a running race */
 void app_rumble(float *low, float *high) {

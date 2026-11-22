@@ -268,7 +268,7 @@ static void take_window(void) {
 static void frame_lock_apply(void) {
   static int applied = -1;
   static ANativeWindow *win;
-  int want = app_frame_lock();
+  int want = app_frame_pref();
   if (!A.window || (want == applied && win == A.window)) return;
   typedef int32_t (*set_rate_fn)(ANativeWindow *, float, int8_t);
   static set_rate_fn set_rate;
@@ -281,8 +281,9 @@ static void frame_lock_apply(void) {
   }
   applied = want, win = A.window;
   if (!set_rate) return;
-  int32_t r = set_rate(A.window, want ? 60.0f : 0.0f, want ? 1 /* fixed source */ : 0 /* default */);
-  fprintf(stderr, "frame rate: %s (setFrameRate %d)\n", want ? "asked the system for 60 Hz" : "left to the system", r);
+  int32_t r = set_rate(A.window, (float)want, want == 60 ? 1 /* fixed source */ : 0 /* default */);
+  if (want) fprintf(stderr, "frame rate: asked the system for %d Hz (setFrameRate %d)\n", want, r);
+  else fprintf(stderr, "frame rate: left to the system (setFrameRate %d)\n", r);
 }
 
 /* The other half of the lock. A 120 Hz panel is a multiple of 60, so the system may well keep it at 120 whatever the window asks (the Thor does), and

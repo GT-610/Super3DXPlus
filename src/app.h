@@ -60,6 +60,8 @@ void app_force_smooth(int on);
 /* Android's 60 FPS LOCK (graphics screen): app_frame_lock_row(1) gives it the row; app_frame_lock() is 1 while it is on, the platform's to ask the system for a 60 Hz screen */
 void app_frame_lock_row(int on);
 int app_frame_lock(void);
+/* the refresh rate (Hz) the Android player asks the system to run the screen at for its window: 60 (the lock), 120 (smooth motion on), 0 (left to the system) */
+int app_frame_pref(void);
 /* the network options screen: the action it asks of the platform, once (1 allow through the firewall, 2 open the log folder, 3 the diagnostics text to the clipboard), and that text */
 int app_net_act(void);
 const char *app_net_diag(void);
