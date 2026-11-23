@@ -44,7 +44,7 @@ typedef struct { int axis; int code; float v; } pad_ev;
 static struct {
   JavaVM *vm;
   jobject activity;
-  jmethodID show_movie, play_bgm, bgm_next, bgm_level, fail, exit_app, rumble;
+  jmethodID show_movie, play_bgm, bgm_next, bgm_level, fail, exit_app, rumble, prefer_refresh;
   int exit_sent;
   char data_dir[512], save_dir[512];
   pthread_mutex_t mx;
@@ -284,6 +284,12 @@ static void frame_lock_apply(void) {
   int32_t r = set_rate(A.window, (float)want, want == 60 ? 1 /* fixed source */ : 0 /* default */);
   if (want) fprintf(stderr, "frame rate: asked the system for %d Hz (setFrameRate %d)\n", want, r);
   else fprintf(stderr, "frame rate: left to the system (setFrameRate %d)\n", r);
+  /* the window's preferred display mode too (Java, MainActivity.preferRefresh): a frame rate request is only a hint, and a phone that holds a game to 60 Hz has answered it with success and kept
+   * 60 (issue 36); a display mode asked for by the window outranks it */
+  if (A.prefer_refresh) {
+    JNIEnv *env = env_here();
+    (*env)->CallVoidMethod(env, A.activity, A.prefer_refresh, (jint)want);
+  }
 }
 
 /* The other half of the lock. A 120 Hz panel is a multiple of 60, so the system may well keep it at 120 whatever the window asks (the Thor does), and
@@ -573,6 +579,7 @@ JNIEXPORT void JNICALL JFN(nativeStart)(JNIEnv *env, jclass cls, jobject activit
   A.fail = (*env)->GetMethodID(env, cls, "fail", "(Ljava/lang/String;)V");
   A.exit_app = (*env)->GetMethodID(env, cls, "exitApp", "()V");
   A.rumble = (*env)->GetMethodID(env, cls, "rumble", "(FF)V");
+  A.prefer_refresh = (*env)->GetMethodID(env, cls, "preferRefresh", "(I)V");
   const char *d = (*env)->GetStringUTFChars(env, data, NULL), *s = (*env)->GetStringUTFChars(env, save, NULL);
   snprintf(A.data_dir, sizeof A.data_dir, "%s", d);
   snprintf(A.save_dir, sizeof A.save_dir, "%s", s);

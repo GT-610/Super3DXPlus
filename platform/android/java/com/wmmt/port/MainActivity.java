@@ -488,6 +488,40 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Se
     });
   }
 
+  /* The refresh the game's window asks for (the 60 FPS LOCK: 60; smooth motion: the highest the screen has; 0: no preference): the window's preferred display mode, the one at
+   * the screen's current size whose rate is nearest (hz 60) or highest (any other). A frame rate hint (ANativeWindow_setFrameRate) is taken by some phones and ignored: a "High"
+   * refresh setting only lets apps pick a fast mode, and a phone that holds games to 60 Hz still did, with the hint accepted (issue 36). */
+  void preferRefresh(final int hz) {
+    runOnUiThread(() -> {
+      try {
+        if (Build.VERSION.SDK_INT < 23) return;
+        android.view.WindowManager.LayoutParams lp = getWindow().getAttributes();
+        int id = 0;
+        if (hz > 0) {
+          android.view.Display d = getWindowManager().getDefaultDisplay();
+          android.view.Display.Mode cur = d.getMode();
+          float bestRate = 0;
+          for (android.view.Display.Mode m : d.getSupportedModes()) {
+            if (m.getPhysicalWidth() != cur.getPhysicalWidth() || m.getPhysicalHeight() != cur.getPhysicalHeight()) continue;
+            float r = m.getRefreshRate();
+            boolean better = hz == 60 ? (bestRate == 0 || Math.abs(r - 60f) < Math.abs(bestRate - 60f)) : r > bestRate;
+            if (better) {
+              bestRate = r;
+              id = m.getModeId();
+            }
+          }
+        }
+        if (lp.preferredDisplayModeId != id) {
+          lp.preferredDisplayModeId = id;
+          getWindow().setAttributes(lp);
+          android.util.Log.i("WMMT", "preferred display mode " + id + " (asked " + hz + " Hz)");
+        }
+      } catch (Throwable t) {
+        android.util.Log.w("WMMT", "preferRefresh: " + t);
+      }
+    });
+  }
+
   /* the pad's rumble (haptic.c: low = the strong motor, high = the weak one, 0..1; the game thread repeats it every 80 ms while it is on, so each
    * call lasts 120 ms and 0 stops it): the game pads' own vibrators (a pad with two motors gets one each, the Retroid's built-in controller
    * too, as Android lists it), or the phone's vibrator when no pad has one */
