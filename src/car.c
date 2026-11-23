@@ -1024,7 +1024,7 @@ static struct {
 } SK;
 
 void car_shake(int tenths) { shake_tenths = tenths < 0 ? 0 : tenths > 10 ? 10 : tenths; }
-static int shake_slow, slow_rej, slow_warm; /* (the first-person lock: samples left out in a row, and steps since its rest place was set) */
+static int shake_slow, slow_rej, slow_warm, far_n; /* (the first-person lock: samples left out in a row, and steps since its rest place was set) */
 void car_shake_slow(int on) { shake_slow = on; } /* (smooth motion's first-person view: the camera's offset and axes follow over about half a second, not a sixth) */
 
 /* the frame the filter works in (rows: its three axes in the world): the car's turn about the up axis, so a corner is not a shake; or, for smooth motion's first-person view,
@@ -1064,11 +1064,15 @@ static void shake_filter(car_state *c) {
   (void)len;
   /* (a cut, a new view, the first frame: no smoothing across it. A cut is metres: the road's jolts move the roof view's eye a metre or more in a few steps, and a limit
    * relative to the offset (about 3 units) made the filter give up exactly there) */
-  if (!SK.on || SK.view != P.view || d > 40.0f * 40.0f || fwd < 0.95f) {
-    SK.on = 1, SK.view = P.view, slow_rej = slow_warm = 0;
+  /* (and only a sample that stays that far is a cut: at 310 km/h the roof camera's samples jump 2 to 4 m fore and aft for a step or two on a steady road, which the black box
+   * showed; each was taken for a cut and the eye went there, and then slid back for seconds. A few steps of far samples are left out, and the eye stays where it was.) */
+  const int far = d > 40.0f * 40.0f || fwd < 0.95f;
+  if (!SK.on || SK.view != P.view || (far && ++far_n > 8)) {
+    SK.on = 1, SK.view = P.view, slow_rej = slow_warm = far_n = 0;
     memcpy(SK.off, off, sizeof off), memcpy(SK.ax, ax, sizeof ax);
     return;
   }
+  if (!far) far_n = 0;
   float a = shake_slow ? 0.02f : 0.1f; /* (a step is 1/60 s: 0.1 of the way is a time constant of about 0.16 s) */
   float s = shake_slow ? 0.0f : shake_tenths / 10.0f;
   if (shake_slow) {
@@ -1083,10 +1087,12 @@ static void shake_filter(car_state *c) {
        * a swing of a few steps moves it a hair, a lasting move is followed in under a second) */
       a = 0.0f;
       ++slow_rej;
-      const float dist = sqrtf(d), st = dist > 0.15f ? 0.15f / dist : 1.0f;
-      for (int k = 0; k < 3; ++k) SK.off[k] += (off[k] - SK.off[k]) * st;
-      for (int r = 0; r < 3; ++r)
-        for (int k = 0; k < 3; ++k) SK.ax[r][k] += (ax[r][k] - SK.ax[r][k]) * 0.01f;
+      if (!far) {
+        const float dist = sqrtf(d), st = dist > 0.15f ? 0.15f / dist : 1.0f;
+        for (int k = 0; k < 3; ++k) SK.off[k] += (off[k] - SK.off[k]) * st;
+        for (int r = 0; r < 3; ++r)
+          for (int k = 0; k < 3; ++k) SK.ax[r][k] += (ax[r][k] - SK.ax[r][k]) * 0.01f;
+      }
     }
   }
   float o[3], x[3][3];
