@@ -1078,12 +1078,15 @@ static void shake_filter(car_state *c) {
     if (d < 25.0f && fwd > 0.998f) {
       slow_rej = 0;
     } else {
+      /* (a transient is left out, but the rest place does not wait and snap: the log's black box showed the roof camera sitting 0.6 to 0.7 m to one side of it for good, and the old
+       * "stay far for two seconds, then go to the sample" made the view jump that far in one step, 5 times in a 100 s run. It slides towards the sample at 0.15 units a step (9 a second):
+       * a swing of a few steps moves it a hair, a lasting move is followed in under a second) */
       a = 0.0f;
-      if (++slow_rej > 120) {
-        slow_rej = slow_warm = 0;
-        memcpy(SK.off, off, sizeof off), memcpy(SK.ax, ax, sizeof ax);
-        return;
-      }
+      ++slow_rej;
+      const float dist = sqrtf(d), st = dist > 0.15f ? 0.15f / dist : 1.0f;
+      for (int k = 0; k < 3; ++k) SK.off[k] += (off[k] - SK.off[k]) * st;
+      for (int r = 0; r < 3; ++r)
+        for (int k = 0; k < 3; ++k) SK.ax[r][k] += (ax[r][k] - SK.ax[r][k]) * 0.01f;
     }
   }
   float o[3], x[3][3];
