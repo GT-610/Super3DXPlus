@@ -750,11 +750,68 @@ static struct { int running, keep, active; } GK;
 static int CARRY, CARRY_LIVE; /* (live: a race has started since it was kept: the first one's last steps do not use it up) */
 void car_carry_gear(int on) { CARRY = on && GK.keep >= 1 ? GK.keep : 0; }
 
+/* The black box (always on, a few lines at most): a race step where the car turns more than 3.4 degrees in one step (200 degrees a second) or the eye moves by more than 0.3 m
+ * against the car writes the 45 steps before it and the 45 after to the log, as "bb" lines (the car's place, heading, speed, the steering as read and as given, the eye,
+ * the nearest traffic car, the wall, the slip), to see what was behind a sudden swing of the view (the car, the camera or the traffic). At most 6 times a race. */
+typedef struct { float t, pos[3], yaw, spd, st_in, st, eye[3], dtraf, wall, slip; int ps; } bb_rec;
+static struct { int n, post, quiet, dumps, head, count; float rel[3], yaw; bb_rec r[45]; } BB;
+
+static void bb_line(const char *tag, int k) {
+  const bb_rec *e = &BB.r[k];
+  fprintf(stderr, "bb%s t=%.2f pos=%.1f,%.1f,%.1f yaw=%.3f spd=%.1f in=%.2f st=%.2f eye=%.1f,%.1f,%.1f traf=%.1f wall=%.2f slip=%.3f ps=%d\n", tag, (double)e->t, (double)e->pos[0], (double)e->pos[1],
+          (double)e->pos[2], (double)e->yaw, (double)e->spd, (double)e->st_in, (double)e->st, (double)e->eye[0], (double)e->eye[1], (double)e->eye[2], (double)e->dtraf, (double)e->wall,
+          (double)e->slip, e->ps);
+}
+
+static void bb_step(const car_state *c) {
+  if (c->race.play_state != 2 || c->race.countdown > 0.0f) {
+    BB.n = 0;
+    return;
+  }
+  float dtraf = 1e9f;
+  for (int i = 0; i < c->n_traffic && i < CAR_TRAFFIC; ++i) {
+    float dx = c->traffic[i].body[12] - c->pos[0], dy = c->traffic[i].body[13] - c->pos[1], dz = c->traffic[i].body[14] - c->pos[2];
+    float d = sqrtf(dx * dx + dy * dy + dz * dz);
+    if (d < dtraf) dtraf = d;
+  }
+  float rel[3], dyaw = c->yaw - BB.yaw;
+  for (int k = 0; k < 3; ++k) rel[k] = c->cam_pos[k] - c->pos[k];
+  while (dyaw > 3.14159265f) dyaw -= 6.2831853f;
+  while (dyaw < -3.14159265f) dyaw += 6.2831853f;
+  const int warm = BB.n++ > 30;
+  float jump = sqrtf((rel[0] - BB.rel[0]) * (rel[0] - BB.rel[0]) + (rel[1] - BB.rel[1]) * (rel[1] - BB.rel[1]) + (rel[2] - BB.rel[2]) * (rel[2] - BB.rel[2]));
+  BB.yaw = c->yaw;
+  memcpy(BB.rel, rel, sizeof rel);
+  bb_rec *e = &BB.r[BB.head];
+  e->t = c->race.total;
+  memcpy(e->pos, c->pos, sizeof e->pos);
+  e->yaw = c->yaw, e->spd = c->speed * 3.6f, e->st_in = c->steer_in, e->st = c->steer;
+  memcpy(e->eye, c->cam_pos, sizeof e->eye);
+  e->dtraf = dtraf > 1e8f ? -1.0f : dtraf, e->wall = c->wall_hit, e->slip = c->phys.slip_body, e->ps = c->race.play_state;
+  BB.head = (BB.head + 1) % 45;
+  if (BB.count < 45) ++BB.count;
+  if (BB.post > 0) {
+    bb_line("+", (BB.head + 44) % 45);
+    if (--BB.post == 0) BB.quiet = 120;
+    return;
+  }
+  if (BB.quiet > 0) --BB.quiet;
+  if (!warm || BB.quiet > 0 || BB.dumps >= 6) return;
+  if (fabsf(dyaw) > 0.06f || jump > 3.0f || (getenv("MT3DX_BBTEST") && BB.n == atoi(getenv("MT3DX_BBTEST")))) { /* (MT3DX_BBTEST=<n>: a trigger at the race's n-th step, to see the lines) */
+    ++BB.dumps;
+    fprintf(stderr, "bb: trigger %d: the car turned %.1f degrees in a step, the eye moved %.2f against the car (%s view)\n", BB.dumps, (double)(dyaw * 57.29578f), (double)jump,
+            c->view == CAR_VIEW_ROOF ? "roof" : "other");
+    for (int k = 0; k < BB.count; ++k) bb_line("-", (BB.head + 45 - BB.count + k) % 45);
+    BB.post = 45;
+  }
+}
+
 int car_start(car_state *c, int course, int manual, const car_spec *spec) {
   /* a fresh arcade memory image per race, like a fresh boot of CSeq::Init */
   P.ready = 0;
   phys_have = 0;
   memset(&GK, 0, sizeof GK);
+  memset(&BB, 0, sizeof BB);
   CARRY_LIVE = CARRY != 0;
   if (CARRY) GK.keep = CARRY, GK.active = 1;
   if (course < 0|| course >= CAR_COURSES || rc_load_image(P.image) != 0) return -1;
@@ -1800,6 +1857,7 @@ void car_update(car_state *c, const car_input *in) {
     if (getenv("MT3DX_LOG")) fprintf(stderr, "gear: %d -> %d at %.0f km/h (lever %d, play state %d)\n", c->gear, gear, (double)fabsf(c->speed) * 3.6, P.lever + 1, c->race.play_state);
   }
   c->gear = gear;
+  bb_step(c);
 
   /* effect cues: squeal from sideways speed, impact from a sudden loss of speed */
   float squeal = fminf(1.0f, fmaxf(0.0f, (fabsf(lateral) - 1.5f) / 5.0f));

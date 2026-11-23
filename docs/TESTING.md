@@ -23,6 +23,7 @@ Set as environment variables (they do nothing unset, and silence the sound unles
 | `MT3DX_STORY_UNITS=<n>` | the units of the story's tuning gauge a win earns (20 fills it, and the tuning screen, the tuning work and the mileage tally follow) |
 | `MT3DX_STORY_STREAK=<n>` | the story win streak shown with a won (cleared) episode: 2 to 99999 shows the result's "N WINS" |
 | `MT3DX_OWNSEL=<n>` | the card in hand is this garage car when a race starts with none (the mileage counts for it) |
+| `MT3DX_BBTEST=<n>` | the black box (`bb` lines in the log: it records itself when the car turns over 200 degrees a second or the eye jumps 0.3 m) fires at the race's n-th step, to see its lines |
 | `MT3DX_TITLE=<id>` | the race plate shows this title (1781 is the Japan build's 連荘キング: its キ and グ were the ones to draw wrong) |
 | `MT3DX_INTERP_LOG=n` | log n frames of a race from its 120th: the frame's length, the time it moved the picture by, the steps run, the blend, the drawn car's and camera's place and the eye-to-car distance |
 | `MT3DX_FRAMELOG=n` | (PC player) every race frame's length and where it went (the app's frame, the swap, the hold), n frames from the 600th; `MT3DX_HITCH=<ms>` logs each frame that took longer |
