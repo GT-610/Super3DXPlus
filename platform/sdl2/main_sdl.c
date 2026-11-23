@@ -616,10 +616,11 @@ static int game(void *arg) {
   /* ANGLE's swap interval 2 on a 120 Hz screen gave a game at 37 fps with 40 ms frames in it (the driver's own: an even 60): its races are smooth-motion races then, one frame a refresh,
    * whatever the SMOOTH MOTION option says; the menus too at an interval of 1 */
   int fast_menus = 0;
+  const int interval_orig = interval; /* (what a race with SMOOTH MOTION off asks for even on ANGLE: the option is the player's) */
   if ((P.angle || P.via_egl) && interval > 1) {
     interval = 1, fast_menus = 1;
     app_force_smooth(1);
-    fprintf(stderr, "ANGLE on a %d Hz screen: a frame every refresh, in the menus too, and smooth motion in the races whatever the option says\n", (int)refresh_hz);
+    fprintf(stderr, "ANGLE on a %d Hz screen: a frame every refresh, in the menus too, and smooth motion in the races (with SMOOTH MOTION off a race is the 60 Hz game at a swap interval of 2, as on any screen)\n", (int)refresh_hz);
   }
   int sw = SDL_GL_SetSwapInterval(fake_hz ? 0 : interval);
   if (sw != 0 && interval != 1) interval = 1, sw = SDL_GL_SetSwapInterval(1);
@@ -784,10 +785,13 @@ static int game(void *arg) {
     if (getenv("MT3DX_SHOT")) shot_check(now_s() - run0); /* (the movie too; in the CRT mode the game's own 640x480) */
     if (CRT.on) crt_present(P.win_w, P.win_h);
     int smooth = app_smooth(); /* (a race drawn with smooth motion: a frame every refresh of the display, not 60 a second) */
-    if (smooth != smooth_now) {
-      smooth_now = smooth;
-      SDL_GL_SetSwapInterval(fake_hz ? 0 : smooth ? 1 : interval);
-      fprintf(stderr, "smooth motion %s: swap interval %d\n", smooth ? "on" : "off", smooth ? 1 : interval);
+    static int slow_now = -1;
+    const int slow = fast_menus && !smooth && app_unsmooth_race(); /* (a race of the 60 Hz game on ANGLE at 120 Hz: the interval the screen needs for it, 37 fps and all, as the option asks) */
+    if (smooth != smooth_now || slow != slow_now) {
+      smooth_now = smooth, slow_now = slow;
+      const int want = smooth ? 1 : slow ? interval_orig : interval;
+      SDL_GL_SetSwapInterval(fake_hz ? 0 : want);
+      fprintf(stderr, "smooth motion %s: swap interval %d\n", smooth ? "on" : "off", want);
     }
     double p0 = now_s();
     SDL_GL_SwapWindow(P.win);
@@ -804,7 +808,7 @@ static int game(void *arg) {
       static double due;
       double t = now_s();
       if (due == 0 || t - due > 0.1) due = t;
-      due += smooth || fast_menus ? 1.0 / refresh_hz : 1.0 / 60.0;
+      due += smooth || (fast_menus && !slow) ? 1.0 / refresh_hz : 1.0 / 60.0;
       if (due > t + 0.002) SDL_Delay((Uint32)((due - t - 0.002) * 1000.0)); /* (a sleep is as coarse as the timer: the last 2 ms spin) */
       while (now_s() < due) {}
     }

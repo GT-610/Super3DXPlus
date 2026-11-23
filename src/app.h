@@ -53,6 +53,7 @@ void app_firewall_row(int on);
 /* 1 while the race on screen is drawn with smooth motion (the picture blended between the physics' steps: a display that is not 60 Hz, a versus): the
  * platform should then show a frame every refresh of the display, not hold itself to 60 a second. */
 int app_smooth(void);
+int app_unsmooth_race(void);
 /* The screen's refresh in Hz where the platform knows it (the PC player, which shows its menus at 60 on a faster screen): smooth motion is chosen by it */
 void app_display_hz(float hz);
 /* 1: smooth motion in every race whatever the option says (the player cannot show the game at 60 on this screen) */

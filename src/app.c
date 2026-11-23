@@ -5033,13 +5033,15 @@ static int want_smooth(void) {
   static int env = -2;
   if (env == -2) env = getenv("MT3DX_INTERP") ? atoi(getenv("MT3DX_INTERP")) : -1;
   if (env >= 0) return env;
+  if (!G.menu.smooth_on) return 0; /* (GAME OPTIONS > GRAPHICS > SMOOTH MOTION off: the arcade's own 60 Hz game, whatever the screen and the player) */
   if (force_smooth) return 1; /* (a player that cannot show a 60 Hz game on a faster screen: ANGLE's swap interval 2 gave 37 fps) */
-  if (!G.menu.smooth_on) return 0; /* (GAME OPTIONS > GRAPHICS > SMOOTH MOTION off) */
   float hz = display_hz > 0 ? display_hz : disp_dt > 0 ? 1.0f / disp_dt : 60.0f; /* (the PC player shows the menus at 60 on a 120 Hz screen: the screen's own rate counts) */
   return fabsf(hz - 60.0f) > 3.0f || G.vs_race;
 }
 
 int app_smooth(void) { return G.interp; }
+/* a race run as the arcade's 60 Hz game (smooth motion off) */
+int app_unsmooth_race(void) { return !G.in_menu && !G.interp; }
 
 /* The time a frame moves the picture by. The frames' own lengths (the clock at each frame's start) are not when they were shown: a PC that queues frames starts several in
  * 7 ms, then waits, and the display shows them all one refresh apart; so the car moved by the clock's time went too slowly for those frames and then too fast. The display's
