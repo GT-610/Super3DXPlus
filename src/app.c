@@ -5189,6 +5189,14 @@ void app_frame(float dt) {
   }
   int movie = G.movie_len > 0 || ending;
   /* the pause menu: the race stands still under it (not once the race has stopped running) */
+  { /* test: MT3DX_VSPAUSE=<n> presses the pause at a versus race's frame n and leaves it after 10 s (the pilot drives the car meanwhile) */
+    static int pf = -2, held;
+    if (pf == -2) pf = getenv("MT3DX_VSPAUSE") ? atoi(getenv("MT3DX_VSPAUSE")) : 0;
+    if (pf > 0 && G.vs_race && !movie) {
+      if (!G.paused && G.race_frames == pf) G.hud.pause_pressed = 1;
+      if (G.paused && ++held == 600) G.paused = 0, G.hud.pause_pressed = 0;
+    }
+  }
   if (!movie && G.hud.pause_pressed && !G.paused && !G.menu.finish && G.car.race.state == CAR_RACE_RUN) {
     G.paused = 1;
     hud_init(&G.hud, G.hud.screen_w, G.hud.screen_h); /* let go of the pedals and the wheel */

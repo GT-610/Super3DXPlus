@@ -313,7 +313,8 @@ static int AUTOP;
 static float AUTOP_V;
 static float autop_speed; /* (car_update's last speed, m/s) */
 void car_autopilot(int on) {
-  if (on && !AUTOP) AUTOP_V = fmaxf(autop_speed, 15.0f);
+  if (on && !AUTOP) AUTOP_V = fmaxf(autop_speed, 15.0f), fprintf(stderr, "versus: paused, the pilot drives at %.0f km/h\n", (double)AUTOP_V * 3.6);
+  if (!on && AUTOP) fprintf(stderr, "versus: the pause is left, the car is back in hand at %.0f km/h\n", (double)autop_speed * 3.6);
   AUTOP = on != 0;
 }
 /* A versus' other cars' crashes: their packets carry no hit, so a car whose speed stays 8 m/s or more under what it was (the highest of 12 steps before the last 8) is a crash for
