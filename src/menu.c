@@ -1290,7 +1290,15 @@ static const struct { int lines; const char *const *file; int logo; } BGM_SETS[3
 static int bgm_set(const menu_state *m);
 /* The 10 out run's own list (the levels 1..10 play their loops, not the card's songs): RANDOM, the five soundtracks (app.c's TEN_LOOP rows d, e, a, b, c;
  * their names are menu_extra.bin's EX_TENBGM + row, the first two Maxi 3's, the others Maxi 2's), NO BGM. The 32-man level keeps the card's list. */
-#define EX_TENBGM 110200
+/* menu_extra.bin's discs, top bar titles and 10 out run names are at 110000, 110100 and 110200, where the Japan build's title glyphs (TITLE_GLYPH1, up to 1573 of them) are
+ * drawn over: the titles' キ and グ drew as an English picture's C and S (issue 38). tools/setup_patch_titles.py makes a menu_extra.bin with them at 116000, 116100 and 116200; this
+ * takes whichever the data has (116000 is the first disc's place in the moved one) */
+static int ex_at(int old_base) {
+  static int moved = -1;
+  if (moved < 0 && anm_sprite(116000) >= 0) moved = 1;
+  return old_base + (moved > 0 ? 6000 : 0);
+}
+#define EX_TENBGM ex_at(110200)
 #define TEN_BGM_LINES 7
 static int ten_pick(const menu_state *m) { return m->game == MENU_GAME_TEN && m->ten_level >= 0 && m->ten_level < 10 && m->vs.state == MENU_VS_OFF; }
 static int bgm_lines(const menu_state *m) { return ten_pick(m) ? TEN_BGM_LINES : BGM_SETS[bgm_set(m)].lines; }
@@ -1738,7 +1746,7 @@ static void card_enter(menu_state *m, int back);
 /* the top bar of one of the port's own screens (menu_extra.bin's titles 20 .. 27: key bindings, volume, meter and BGM, HUD options, information, debug options, vibration, display options): 1 when drawn, else
  * the caller puts its words */
 static int draw_title_bar(int bars, int k) {
-  int s = anm_sprite(110100 + 20 + k);
+  int s = anm_sprite(ex_at(110100) + 20 + k);
   if (s < 0) return 0;
   anm_swap title = { anm_sprite(T_TOPBAR_MES), s };
   draw_topbar(bars, 1, &title);
@@ -4254,8 +4262,8 @@ static void draw_grid(const menu_state *m, int clock, float fade, int bars, void
 }
 
 /* tools/extrapack.py's EX_DISC_BASE and EX_TITLE_BASE (menu_extra.bin: the selectors' discs and top bar titles) */
-#define EX_DISC 110000
-#define EX_TITLE 110100
+#define EX_DISC ex_at(110000)
+#define EX_TITLE ex_at(110100)
 
 /* four discs, centred (layout px): the one on large, the others small, room beside the one on for the arrows; the centre of disc i with disc `sel` on */
 #define D4_BIG 200.0f
@@ -5030,7 +5038,7 @@ static void draw_card(const menu_state *m, int clock, float fade, int bars, void
     snprintf(text, sizeof text, "THIS TIME %ld km", (long)((o->odo - o->odo0) / 1000.0));
     ex_text(2, text, x0, y + 26.0f, fade);
   }
-  anm_swap title = { anm_sprite(T_TOPBAR_MES), anm_sprite(110100 + 9) >= 0 ? anm_sprite(110100 + 9) : anm_sprite(S_CARD_TOPBAR) }; /* ("(1/7)") */
+  anm_swap title = { anm_sprite(T_TOPBAR_MES), anm_sprite(ex_at(110100) + 9) >= 0 ? anm_sprite(ex_at(110100) + 9) : anm_sprite(S_CARD_TOPBAR) }; /* ("(1/7)") */
   draw_topbar(bars, fade, &title);
   draw_bottom(bars, fade);
   int hint = anm_sprite(CARD_TEXT + C_CARD_HINT);

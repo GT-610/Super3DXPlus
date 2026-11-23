@@ -609,6 +609,7 @@ static short plate_name[5];
 
 void hud_set_card(int title, const short *name) {
   plate_title = title > 0 ? title : TITLE_FIRST;
+  if (getenv("MT3DX_TITLE")) plate_title = atoi(getenv("MT3DX_TITLE")); /* test: the plate shows this title (1781 is the Japan build's 連荘キング) */
   plate_name_n = 0;
   for (int i = 0; name && i < 5 && name[i] >= 0 && name[i] < NAMEDB_N; ++i) plate_name[plate_name_n++] = name[i];
 }
