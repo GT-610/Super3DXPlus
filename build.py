@@ -14,7 +14,8 @@ with --target pi from another machine with a sysroot, see docs/PI.md), `macos` (
 a desktop OpenGL 2.1 context, platform/macos/gl_mac.c).
 
 Compilers, in the order tried unless you pass --cc: for windows `zig cc` (one download from ziglang.org, no installer; `python
-build.py setup-zig` fetches it into .super3dx/), then mingw-w64's x86_64-w64-mingw32-gcc (MSYS2, or Linux); for linux gcc or clang.
+build.py setup-zig` fetches it into .super3dx/), then mingw-w64's x86_64-w64-mingw32-gcc (MSYS2, or Linux); for linux and macos
+gcc or clang (macOS: the Xcode command line tools' clang).
 The Windows build also needs the SDL2 development files for mingw (`python build.py setup-sdl2`, or SDL2_DIR=<...>/x86_64-w64-mingw32).
 zlib and the OpenGL ES headers are in third_party/ and need nothing installed.
 """
@@ -472,7 +473,8 @@ def doctor():
     line("gcc / clang", which("gcc", "clang", "cc"), "apt install build-essential (macOS: xcode-select --install)")
     line("SDL2 for mingw", sdl2_mingw(), "python build.py setup-sdl2")
     line("SDL2 (Linux dev files)", which("sdl2-config") or (which("pkg-config") and subprocess.run([which("pkg-config"), "--exists", "sdl2"]).returncode == 0 and "pkg-config"), "apt install libsdl2-dev libegl1-mesa-dev libgles2-mesa-dev (macOS: brew install sdl2)")
-    say("Windows needs one of (zig, mingw-w64) plus SDL2 for mingw; Linux needs gcc/clang plus the SDL2 dev files. The rest is for the data.")
+    say("Windows needs one of (zig, mingw-w64) plus SDL2 for mingw; Linux needs gcc/clang plus the SDL2 dev files; macOS needs the Xcode "
+        "command line tools plus SDL2 (`brew install sdl2`). The rest is for the data.")
 
 
 def _has(mod):
@@ -762,12 +764,14 @@ def wizard(folder, opt, jobs, full=False):
             say("SDL2: found.")
     else:
         missing = []
+        if target == "macos" and which("xcode-select") and subprocess.run([which("xcode-select"), "-p"], capture_output=True).returncode != 0:
+            missing.append("the Xcode command line tools")  # (/usr/bin/clang is a stub until they are installed)
         if not which("gcc", "clang", "cc"):
             missing.append("a C compiler")
         if not (which("sdl2-config") or (which("pkg-config") and subprocess.run([which("pkg-config"), "--exists", "sdl2"]).returncode == 0)):
             missing.append("the SDL2 development files")
         if missing:
-            say("\nMissing: " + " and ".join(missing) + ". " + ("On macOS (Homebrew), install them with:\n\n    brew install sdl2 ffmpeg\n"
+            say("\nMissing: " + " and ".join(missing) + ". " + ("On macOS: the Xcode command line tools bring the compiler, Homebrew the rest:\n\n    xcode-select --install\n    brew install sdl2 ffmpeg\n"
                 if target == "macos" else "On Ubuntu/Debian/Raspberry Pi OS, install them with:\n\n    sudo apt install build-essential libsdl2-dev libegl1-mesa-dev libgles2-mesa-dev ffmpeg\n"))
             say("then run this again.")
             return 1

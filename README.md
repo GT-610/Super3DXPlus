@@ -73,7 +73,7 @@ It is substantially harder than building it on a PC, but it is possible.
 ```
 build.py        build driver (Windows, Linux, macOS)
 src/            the game (platform-neutral C)
-platform/       per-target code: sdl2/ (PC, Pi), android/, pi/
+platform/       per-target code: sdl2/ (PC, Pi), macos/ (GLES2 over desktop OpenGL), android/, pi/
 tools/          data pipeline (Python): converters, generators, packers, per-build address tables
 test/           desktop tests in C
 third_party/    stb, zlib, Khronos GLES2 headers (each with its own notice)
