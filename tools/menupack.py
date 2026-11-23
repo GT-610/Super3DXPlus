@@ -744,7 +744,7 @@ CARD_HAVE = [(J(0x1720), 169, 190, "SAVED CARS"), (J(0x13C5), 145, 172, "NEW CAR
              (J(0x1720), 169, 190, "SAVE IT"), (J(0x13C5), 145, 172, "DON'T SAVE")]
 CARD_GLYPH2, CARD_GLYPHS2 = 105020, "0123456789-,"
 CARD_GLYPH5, CARD_GLYPHS5 = 105040, "0123456789-"
-CARD_CAR_BASE, CARD_COLOR_BASE = 105100, 105200
+CARD_CAR_BASE, CARD_COLOR_BASE = 105100, 118000  # (the colour names were at 105200, and the Special Vehicles' (up to 105452) ran over the class rows at 105400: a tuned Corolla's Body color showed "B3 Class /Wangan Beginner")
 # The card's title row (clSeqCardDisp1::run 0x87de991: the class's string, "級", a full-width space, "/", the title)
 # for each class 0..46 (GetClassStr's table at 0x9332980), the title the port's one, as
 # CARD_CLASS_BASE + class.
@@ -915,6 +915,8 @@ def render_lines(elf, names, root, font, lines):
     """clSpriteFont::draw of a string with new lines: each line from the same left, one full
     width further down. The sprite is the widest line's advances (updateSize's width) plus a
     cell wide, so the drawer can take that width back off."""
+    if font == CUTIN_FONT:  # (the story's lines write a comma as "^": the arcade shows a comma there, a caret was drawn)
+        lines = [t.replace("^", ",") for t in lines]
     _, half, full, cell = struct.unpack_from("<4I", elf.d, elf.off(FONT_TABLE + 36 * font))
     adv = [sum(half if ord(c) <= 0x7F else full for c in t) for t in lines]
     out = Image.new("RGBA", (max(adv) + cell, full * (len(lines) - 1) + cell))

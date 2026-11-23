@@ -342,7 +342,8 @@ int hud_gl_init(void) {
   return navi_gl_init();
 }
 
-static void color(float r, float g, float b, float a) { glUniform4f(u_color, r, g, b, a); }
+static float key_mul = 1.0f; /* the touch controls' opacity while draw_keys draws them */
+static void color(float r, float g, float b, float a) { glUniform4f(u_color, r, g, b, a * key_mul); }
 /* the sprites' colour, as the arcade's anm records give it: texel * mul + add */
 static void tint(float r, float g, float b, float a) { glUniform4f(u_mul, r, g, b, a); }
 static void tint_add(float r, float g, float b) { glUniform4f(u_add, r, g, b, 0); }
@@ -2565,7 +2566,13 @@ static void draw_countdown(const car_state *car) {
 
 /* the race's touch keys (each side's in its own projection, key_ortho); steer the wheel's
  * turn for the bar between the steer keys, all_keys 0 for pause only */
+static void draw_keys_at(const hud_state *h, float steer, int all_keys);
 static void draw_keys(const hud_state *h, float steer, int all_keys) {
+  key_mul = h->key_alpha > 0.05f && h->key_alpha < 1.0f ? h->key_alpha : 1.0f; /* (the TOUCH CONTROLS' BUTTON OPACITY) */
+  draw_keys_at(h, steer, all_keys);
+  key_mul = 1.0f;
+}
+static void draw_keys_at(const hud_state *h, float steer, int all_keys) {
   /* steering (the gyro's: none); each side's keys in its own projection (key_ortho) */
   if (all_keys) {
     rect brake = h->gyro ? G_BRAKE : BRAKE, up = h->gyro ? G_SHIFT_UP : SHIFT_UP, down = h->gyro ? G_SHIFT_DOWN : SHIFT_DOWN;

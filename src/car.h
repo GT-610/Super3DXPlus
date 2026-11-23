@@ -188,6 +188,7 @@ typedef struct {
   /* the rivals (car_set_rivals), each: on the road near enough to draw, and its model matrix
    * like body (CSeq::GetInfoRivalCarDisp) */
   int rival_shown[CAR_RIVALS];
+  float rival_impact[CAR_RIVALS]; /* a versus' other car that lost speed all at once (m/s lost over a tenth of a second) this step: a crash, for the sound (sound.c) */
   float rival_body[CAR_RIVALS][16];
   /* the tyres (SInfoCarDisp, as nsCarDispManager::clCarDisp::update takes them), per corner
    * CAR_FL, CAR_FR, CAR_RL, CAR_RR: the posture relative to the body (GL column-major; its
@@ -337,6 +338,8 @@ const char *car_link_ramp_name(int ramp);
 int car_start(car_state *c, int course, int manual, const car_spec *spec);
 /* a story select's next race keeps the gear the player was in at the end of this one (on 1), or forget it (0) */
 void car_carry_gear(int on);
+/* a paused versus race: the arcade's pilot drives the car at the speed it had (on 1) until it is given back (0) */
+void car_autopilot(int on);
 /* Switch between the automatic and manual gearbox on the move. */
 void car_set_manual(car_state *c, int manual);
 /* Put the car back on the road where it is, facing the course in the start's lane (the

@@ -1076,6 +1076,8 @@ static int options_load(void) {
   if (n >= 3 && fscanf(f, " lock60 %d", &fl60) == 1) G.menu.lock60 = fl60 != 0;
   int sm = 1; /* (SMOOTH MOTION, after it: on unless the file says off) */
   if (n >= 3 && fscanf(f, " smooth %d", &sm) == 1) G.menu.smooth_on = sm != 0;
+  int ta = 10; /* (the touch controls' BUTTON OPACITY, after it: solid unless the file says less) */
+  if (n >= 3 && fscanf(f, " touchalpha %d", &ta) == 1) G.menu.key_alpha = ta < 1 ? 1 : ta > 10 ? 10 : ta;
   fclose(f);
   if (n < 3) return 0;
   G.menu.hires = hires != 0;
@@ -1092,8 +1094,8 @@ static int options_load(void) {
 }
 
 static void options_save(void) {
-  static int last[80] = { -1 };
-  int now[80] = { G.menu.gyro, G.menu.gyro_sens, G.menu.over_on, G.menu.sharp_on, G.menu.pedal_slide, G.menu.ao_on,
+  static int last[96] = { -1 };
+  int now[96] = { G.menu.gyro, G.menu.gyro_sens, G.menu.over_on, G.menu.sharp_on, G.menu.pedal_slide, G.menu.ao_on,
                   G.menu.bm_on, G.menu.hd_tex, G.menu.bloom_on, G.menu.ssao_on, G.menu.wet_on, G.menu.paint_on,
                   G.menu.aa4, G.menu.hires };
   for (int g = 0; g < 3; ++g)
@@ -1114,7 +1116,7 @@ static void options_save(void) {
   for (int e = 0; e < 7; ++e) now[51 + e * 3] = G.menu.el_k[e], now[52 + e * 3] = G.menu.el_dx[e], now[53 + e * 3] = G.menu.el_dy[e];
   for (int g = 3; g < HUD_KEY_GROUPS; ++g) /* (the shift keys' own, after them) */
     now[72 + (g - 3) * 3] = G.menu.key_k[g], now[73 + (g - 3) * 3] = G.menu.key_dx[g], now[74 + (g - 3) * 3] = G.menu.key_dy[g];
-  now[78] = G.menu.lock60, now[79] = G.menu.smooth_on;
+  now[78] = G.menu.lock60, now[79] = G.menu.smooth_on, now[80] = G.menu.key_alpha;
   if (G.options_global && !memcmp(now, last, sizeof now)) return;
   char path[1100];
   snprintf(path, sizeof path, "%s/option", G.save_dir);
@@ -1149,6 +1151,7 @@ static void options_save(void) {
   fprintf(f, "\n");
   fprintf(f, "lock60 %d\n", now[78]);
   fprintf(f, "smooth %d\n", now[79]);
+  fprintf(f, "touchalpha %d\n", now[80]);
   fclose(f);
   memcpy(last, now, sizeof last);
   G.options_global = 1;
@@ -1954,6 +1957,7 @@ static void hud_options(void) {
   G.hud.gyro = G.menu.gyro == HUD_STEER_GYRO;
   G.hud.slide = G.menu.pedal_slide;
   G.hud.tilt = G.tilt;
+  G.hud.key_alpha = 0.1f * (float)(G.menu.key_alpha < 1 ? 1 : G.menu.key_alpha > 10 ? 10 : G.menu.key_alpha);
   G.hud.full = (50.0f - (float)(G.menu.gyro_sens - 1) * (35.0f / 9.0f)) * 0.0174533f;
   /* the KEY LAYOUT's (menu.c MENU_LAYOUT) */
   for (int g = 0; g < HUD_KEY_GROUPS; ++g)
@@ -3355,7 +3359,7 @@ static void movie_close(void) {
  * what both ends must compute alike for a race to stay in sync (the physics and car code the packets feed, the start, the track and ramp choice). A look,
  * a menu, an option, a fix that stays on one machine does not touch it. Bump it by one in the commit that makes such a change, and say why in the log
  * of docs/VERSUS.md "Protocol versions". The static asserts below hold the wire's own numbers: one that fails means the wire changed, so bump this. */
-#define VS_BUILD 171
+#define VS_BUILD 172
 /* and the car's special colour (menu ccolor: 0 its own) */
 #define VS_PROFILE_CC 21
 #define VS_PROFILE 22
@@ -3914,6 +3918,14 @@ static void vs_menu(void) {
   const net_lobby *l = net_lobby_now();
   if (l->connected) {
     if (m->vs.state == MENU_VS_CONNECTING) m->vs.state = MENU_VS_LOBBY, m->vs.ready = m->vs.auto_ready;    m->vs.n = l->n < MENU_VS_PLAYERS ? l->n : MENU_VS_PLAYERS;
+    { /* a player joins the lobby (turning2) or leaves it (error); this machine's own coming in is silent */
+      static int prev_n = -1;
+      if (m->vs.state != MENU_VS_LOBBY || G.vs_race) prev_n = -1;
+      else {
+        if (prev_n >= 0 && m->vs.n != prev_n) snd_effect(m->vs.n > prev_n ? "turning2" : "error", 1.0f);
+        prev_n = m->vs.n;
+      }
+    }
     m->vs.me = l->me;
     m->vs.host = l->host;
     m->vs.picker = vs_picker(l);
@@ -4263,6 +4275,7 @@ static void vs_left_check(void) {
     for (char *c = name; *c; ++c) *c = (char)toupper((unsigned char)*c);
     snprintf(G.vs_left_msg, sizeof G.vs_left_msg, "%s HAS DISCONNECTED.", name);
     G.vs_left_t = 1;
+    snd_effect("turning4", 1.0f); /* (a player leaves the race) */
     fprintf(stderr, "versus: %s left the race (%d of %d others gone)\n", name, G.vs_left_n, G.n_rival);
     if (G.vs_left_n >= G.n_rival) G.vs_forfeit = 1;
   }
@@ -5358,6 +5371,7 @@ void app_frame(float dt) {
       if (warp == -2) warp = getenv("MT3DX_WARPTEST") ? atoi(getenv("MT3DX_WARPTEST")) : -1;
       if (warp > 0 && G.race_frames == warp && i == 0) fprintf(stderr, "warp test: car_reset at frame %d\n", warp), car_reset(&G.car);
     }
+    car_autopilot(G.paused && G.vs_race); /* (a versus runs on under its pause menu: the pilot drives it) */
     car_update(&G.car, &in);
     pend_up = pend_down = pend_gear = 0;
     haptic_set_levels(G.menu.rum);

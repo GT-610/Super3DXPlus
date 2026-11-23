@@ -308,6 +308,55 @@ void f_8992604(void); /* yt::GetBattleRaceField(ERamp) */
 static void lx_reset(void); /* (below: the measuring of the arcade's latency compensation) */
 static void rx_reset(void);
 static void sp_reset(void);
+/* The pilot drives while a versus race is paused (the others race on: the arcade's CMcPilot steers and the speed the car had is held, until the pause is left) */
+static int AUTOP;
+static float AUTOP_V;
+static float autop_speed; /* (car_update's last speed, m/s) */
+void car_autopilot(int on) {
+  if (on && !AUTOP) AUTOP_V = fmaxf(autop_speed, 15.0f);
+  AUTOP = on != 0;
+}
+/* A versus' other cars' crashes: their packets carry no hit, so a car whose speed stays 8 m/s or more under what it was (the highest of 12 steps before the last 8) is a crash for
+ * the sound (a traffic car beside you, a wall; the arcade plays it for every car near you). A stall of the packets (a few steps of no motion, then a jump) is not one: the last 8 steps
+ * must all be slow. Once a second at most each. */
+static struct { float pos[3]; float spd[20]; int n, cool; } RH[CAR_RIVALS];
+static void rival_impacts(car_state *c) {
+  for (int k = 0; k < CAR_RIVALS; ++k) {
+    c->rival_impact[k] = 0.0f;
+    if (!P.vs_race || !c->rival_shown[k]) {
+      RH[k].n = 0;
+      continue;
+    }
+    const float *b = c->rival_body[k] + 12;
+    float spd = 0.0f;
+    if (RH[k].n > 0) {
+      const float dx = b[0] - RH[k].pos[0], dy = b[1] - RH[k].pos[1], dz = b[2] - RH[k].pos[2];
+      spd = sqrtf(dx * dx + dy * dy + dz * dz) * 6.0f; /* (units of 0.1 m a step) */
+      if (spd > 150.0f) RH[k].n = 0, spd = 0.0f; /* (a warp, not a drive) */
+    }
+    memcpy(RH[k].pos, b, sizeof RH[k].pos);
+    if (RH[k].cool > 0) --RH[k].cool;
+    if (RH[k].n == 0) {
+      RH[k].n = 1;
+      continue;
+    }
+    if (RH[k].n < 20) {
+      RH[k].spd[RH[k].n++ - 1] = spd;
+      continue;
+    }
+    for (int i = 0; i < 18; ++i) RH[k].spd[i] = RH[k].spd[i + 1];
+    RH[k].spd[18] = spd;
+    float top = 0.0f, recent = 0.0f;
+    for (int i = 0; i < 11; ++i) top = fmaxf(top, RH[k].spd[i]);
+    for (int i = 11; i < 19; ++i) recent = fmaxf(recent, RH[k].spd[i]);
+    if (top - recent >= 8.0f && RH[k].cool == 0) {
+      c->rival_impact[k] = top - recent;
+      RH[k].cool = 90;
+      fprintf(stderr, "versus: car %d lost %.1f m/s (%.0f to %.0f km/h): a crash, for the sound, race time %.2f\n", k, (double)(top - recent), (double)(top * 3.6f), (double)(recent * 3.6f), (double)c->race.total);
+    }
+  }
+}
+static float vs_time_km; /* this race's km if it is a versus (the time it starts with, first_frame) */
 static unsigned link_gone;
 static uint32_t gone_cnt[CAR_LINK_MACHINES];
 void car_set_versus(int pcb, const car_link_car *others, int n, int ramp, float km, unsigned seed, const car_link_io *io) {
@@ -826,6 +875,7 @@ int car_start(car_state *c, int course, int manual, const car_spec *spec) {
   phys_have = 0;
   memset(&GK, 0, sizeof GK);
   memset(&BB, 0, sizeof BB);
+  memset(&RH, 0, sizeof RH);
   CARRY_LIVE = CARRY != 0;
   if (CARRY) GK.keep = CARRY, GK.active = 1;
   if (course < 0|| course >= CAR_COURSES || rc_load_image(P.image) != 0) return -1;
@@ -927,6 +977,7 @@ int car_start(car_state *c, int course, int manual, const car_spec *spec) {
   }
   call(f_89878c4, 1, cfg);
   P.vs_race = P.vs_on ? P.vs_n : 0;
+  vs_time_km = P.vs_on ? P.vs_km : 0.0f;
   P.vs_on = 0; /* car_set_versus is for this race only */
   call(f_89a2584, 1, fbits(1.0f / 60.0f));
   call(f_89a2548, 1, fbits(1.0f));
@@ -1660,6 +1711,11 @@ static void first_frame(car_state *c) {
   }
   if (getenv("WMMT_TA_TIME")) WF(RCA(9802a6c), (float)atof(getenv("WMMT_TA_TIME"))); /* test: the time to start with */
 #endif
+  if (vs_time_km > 13) { /* a versus' time: the arcade's 360 s are for its 13 km (a 20 km race at full pace ran out); the same pace for the km chosen */
+    const float t = 360.0f * vs_time_km / 13.0f;
+    WF(RCA(9802a6c), t);
+    fprintf(stderr, "versus: %d km, the time to start with %.0f s (the arcade's 360 is for 13)\n", (int)vs_time_km, (double)t);
+  }
   read_race(&c->race);
   c->manual = P.manual;
   c->gear = P.manual ? 2 : 1;
@@ -1813,7 +1869,7 @@ void car_update(car_state *c, const car_input *in) {
   }
   WF(P.gin, c->steer);
 #ifdef WMMT_EGL
-  if (getenv("WMMT_PILOT")) { /* test: the arcade's own pilot (CMcPilot) steers, flat out */
+  if (getenv("WMMT_PILOT") || AUTOP) { /* test: the arcade's own pilot (CMcPilot) steers, flat out (and in a paused versus race) */
     uint32_t pilot = M32(RCA(98028dc));
     W32(pilot, M32(RCA(9802924)));
     W32(pilot + 4, M32(RCA(9802928)));
@@ -1827,8 +1883,8 @@ void car_update(car_state *c, const car_input *in) {
     if (getenv("WMMT_PILOT_BIAS")) WF(P.gin, MF(P.gin) + (float)atof(getenv("WMMT_PILOT_BIAS"))); /* test: a steady steering offset, to hug a lane */
   }
 #endif
-  WF(P.gin + 4, in->throttle);
-  WF(P.gin + 8, in->brake);
+  if (AUTOP) WF(P.gin + 4, c->speed < AUTOP_V ? 1.0f : 0.0f), WF(P.gin + 8, 0.0f); /* (held at the speed it had) */
+  else WF(P.gin + 4, in->throttle), WF(P.gin + 8, in->brake);
   W32(P.gin + 0x14, P.manual ? (uint32_t)P.lever : 0xffffffffu);
   /* the arcade frame: the traffic's AI and life, the car, what everything hit, the
    * checkpoints and the time, the sounds' cues */
@@ -1845,6 +1901,7 @@ void car_update(car_state *c, const car_input *in) {
   read_jct_blocks(c);
   read_traffic(c);
   read_rival(c);
+  rival_impacts(c);
   read_race(&c->race);
   read_se(&c->se);
   c->camfx[0] = MF(P.m + 0xb60 + 8), c->camfx[1] = MF(P.m + 0xb60 + 0xc);
@@ -1853,6 +1910,7 @@ void car_update(car_state *c, const car_input *in) {
   float v[3] = { (c->pos[0] - prev[0]) * 6.0f, (c->pos[1] - prev[1]) * 6.0f, (c->pos[2] - prev[2]) * 6.0f };
   const float *M = c->body;
   c->speed = v[0] * M[8] + v[1] * M[9] + v[2] * M[10];
+  autop_speed = c->speed;
   float lateral = v[0] * M[0] + v[1] * M[1] + v[2] * M[2];
 
   c->rpm = MF(P.m + M_ENGINE + 8) * (60.0f / 6.2831853f);

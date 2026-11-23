@@ -20,6 +20,7 @@ typedef struct {
    * turn (radians, + to the right, app_tilt); full: the turn that is full lock */
   int gyro;
   float tilt, full;
+  float key_alpha; /* the touch controls' opacity (0.1 .. 1) */
   /* the steering (the OPTION screen's): HUD_STEER_KEYS the two keys, _GYRO the
    * tilt (gyro set too), _WHEEL a wheel on screen turned with a finger (WHEEL_LOCK of its turn
    * full lock, back to straight when let go), _STICK a stick that comes up where the thumb

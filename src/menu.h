@@ -208,6 +208,7 @@ typedef struct {
    * bridge reflection on the car (on 1), the FSR sharpening (on 1), the cars' baked ambient
    * occlusion (on 1) and the back mirror (on 1); kept with the garage too. */
   int gyro, gyro_sens, over_on, sharp_on, pedal_slide, ao_on, bm_on;
+  int key_alpha; /* the touch controls' opacity, in tenths (1..10, 10 solid) */
   /* the HUD options (MENU_HUDOPT): the input readout over the race, the fps counter in the arcade HUD (the touch HUD always has it); the back
    * mirror (bm_on) is among them; hud_row the row the controls are on */
   int readout_on, fps_on, hud_row;

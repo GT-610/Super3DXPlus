@@ -1436,6 +1436,11 @@ static void vs_day_step(menu_state *m, const menu_in *in) {
     go(m, MENU_VS);
     return;
   }
+  { /* the result of the time zone vote comes with the sound of a decision (the start's) */
+    static int said;
+    if (m->vs.day_final < 0) said = 0;
+    else if (!said) said = 1, snd_menu(SND_START);
+  }
   m->vs.day_t++;
   if (m->vs.day_final >= 0) {
     if (m->zone != m->vs.day_final && !m->slide) m->zone = m->vs.day_final, m->card_t = 0;
@@ -3006,8 +3011,8 @@ static void axis_apply(menu_state *m, int axis) {
  * press brings the key lists back. Rows in bind_row; a tap sends the row (select) and the value (tab). ---- */
 static int bind_touch(const menu_state *m) { return option_touch() && m->ctl_touch; }
 static const char *const TC_STEER[HUD_STEER_MODES] = { "BUTTONS", "GYRO", "WHEEL", "STICK" };
-enum { TC_STEERING, TC_SENS, TC_PEDALS, TC_LAYOUT, TC_ROWS };
-static const char *const TC_NAME[TC_ROWS] = { "STEERING", "SENSITIVITY", "SLIDER PEDALS", "TOUCH LAYOUT" };
+enum { TC_STEERING, TC_SENS, TC_PEDALS, TC_ALPHA, TC_LAYOUT, TC_ROWS };
+static const char *const TC_NAME[TC_ROWS] = { "STEERING", "SENSITIVITY", "SLIDER PEDALS", "BUTTON OPACITY", "TOUCH LAYOUT" };
 #define TC_Y0 118.0f
 #define TC_DY 36.0f
 #define TC_X 250.0f
@@ -3036,6 +3041,7 @@ static void touchctl_step(menu_state *m, const menu_in *in) {
     if (row == TC_STEERING && in->tab < HUD_STEER_MODES) tc_set(m, &m->gyro, in->tab);
     else if (row == TC_SENS && m->gyro == HUD_STEER_GYRO && in->tab >= 1 && in->tab <= 10) tc_set(m, &m->gyro_sens, in->tab);
     else if (row == TC_PEDALS) tc_set(m, &m->pedal_slide, in->tab != 0);
+    else if (row == TC_ALPHA && in->tab >= 1 && in->tab <= 10) tc_set(m, &m->key_alpha, in->tab);
     return;
   }
   if (in->dy) {
@@ -3052,6 +3058,9 @@ static void touchctl_step(menu_state *m, const menu_in *in) {
       if (m->gyro == HUD_STEER_GYRO && s >= 1 && s <= 10) tc_set(m, &m->gyro_sens, s);
     } else if (row == TC_PEDALS) {
       tc_set(m, &m->pedal_slide, in->dx < 0); /* (left is ON) */
+    } else if (row == TC_ALPHA) {
+      int s = m->key_alpha + in->dx;
+      if (s >= 1 && s <= 10) tc_set(m, &m->key_alpha, s);
     }
     return;
   }
@@ -3080,6 +3089,9 @@ static void touchctl_pointer(const menu_state *m, menu_in *in) {
       if (x >= cx - 4.0f && x < cx + cw + 4.0f) in->tab = c;
     }
   } else if (row == TC_SENS) {
+    int i = (int)floorf((x - TC_X) / TC_CELL);
+    if (i >= 0 && i < 10) in->tab = i + 1;
+  } else if (row == TC_ALPHA) {
     int i = (int)floorf((x - TC_X) / TC_CELL);
     if (i >= 0 && i < 10) in->tab = i + 1;
   } else if (row == TC_PEDALS) {
@@ -3121,6 +3133,14 @@ static void draw_touchctl(const menu_state *m, float screen_w, float screen_h) {
       char t[8];
       snprintf(t, sizeof t, "%d", m->gyro_sens);
       hud_ui_text(t, (TC_X + TC_CELL * 10.0f + 12.0f) * k, y * k - 3.5f * 3.0f, 3.0f, 1, 1, 1, dim ? 0.45f : 1.0f);
+    } else if (r == TC_ALPHA) {
+      for (int i = 0; i < 10; ++i) {
+        int lit = i < m->key_alpha;
+        hud_ui_rect((TC_X + TC_CELL * (float)i + 2.0f) * k, (y - 10.0f) * k, (TC_CELL - 4.0f) * k, 20.0f * k, lit ? 0.85f : 0.0f, lit ? 0.88f : 0.0f, lit ? 0.92f : 0.0f, lit ? 0.35f + 0.065f * (float)i : 0.4f);
+      }
+      char t[8];
+      snprintf(t, sizeof t, "%d%%", m->key_alpha * 10);
+      hud_ui_text(t, (TC_X + TC_CELL * 10.0f + 12.0f) * k, y * k - 3.5f * 3.0f, 3.0f, 1, 1, 1, 1.0f);
     } else if (r == TC_PEDALS) {
       for (int c = 0; c < 2; ++c) {
         float x = TC_X + 80.0f * (float)c;
@@ -3934,7 +3954,7 @@ enum {
 #define CARD_GLYPH2 105020 /* font 2: 0..9, '-', ',' */
 #define CARD_GLYPH5 105040 /* font 5: 0..9, '-' */
 #define CARD_CAR 105100    /* each car's name, two lines */
-#define CARD_COLOR 105200  /* the colour names, by cardb's text (100002 on) */
+#define CARD_COLOR 118000  /* the colour names, by cardb's text (100002 on; 105200 before, where the Special Vehicles' ran over the class rows) */
 #define CARD_CLASS 107200  /* (menu_extra.bin's: menu.bin's at 105400 were run over by the colour names) the title row by class: "B7級　/湾岸の新人" */
 #define CARD_CLASSP 107300 /* and without the title: "B7級　/" */
 /* the titles' characters (src/titledb.h TITLEDB_CHAR) in fonts 1, 5 and 7: menupack.py
@@ -7584,7 +7604,7 @@ void menu_init(menu_state *m) {
   m->vol[0] = 5;
   m->vol[4] = m->vol[5] = 5; /* (engine and turbo balance: 5 = the arcade's, 100%) */
   m->ten_beep = 1;
-  m->rum[0] = 8, m->rum[1] = 10, m->rum[2] = 10, m->rum[3] = 5, m->cam_shake = 10, m->smooth_on = 1;
+  m->rum[0] = 8, m->rum[1] = 10, m->rum[2] = 10, m->rum[3] = 5, m->cam_shake = 10, m->smooth_on = 1, m->key_alpha = 10;
   m->mip = 2;
   /* (the SSAO off: its 20 ms on the Mi 6 cost the 60 fps) */
   m->hd_tex = 1, m->bloom_on = 0, m->ssao_on = 0, m->wet_on = 0, m->paint_on = 1, m->aa4 = 0;
@@ -10665,6 +10685,7 @@ static void vs_area_step(menu_state *m, const menu_in *in) {
   }
   if (m->vs.move_t < AREA_MOVE && m->vs.item_from >= 0 && ++m->vs.move_t >= AREA_MOVE) m->vs.item_from = -1;
   if (m->vs.area_final >= 0) {
+    if (m->vs.final_t == 0) snd_menu(SND_START); /* (the area is decided) */
     if (m->vs.final_t == 0 && m->vs.item != m->vs.area_final) {
       /* the strip jumps to the result: its place and scroll as the cursor's walk there */
       m->vs.item = m->vs.area_final;

@@ -135,6 +135,7 @@ Every race packet carries its sender's round trip to the host after the car link
 | 169 | the first build with the mark |
 | 170 | the race packet's trailing round trip (ping), the host's statuses carrying the area card after the vote, the ping on the HUD |
 | 171 | a player's READY in the lobby (status 12), the host's START waiting for every other player's, AUTO READY; a race that stands still 30 s sends everyone back |
+| 172 | the time a race starts with grows with its km (360 s x km / 13 above 13 km: the arcade's time is for its 13 km), so a long race ends for every player at the same time |
 
 ## Ready and the hang check
 
