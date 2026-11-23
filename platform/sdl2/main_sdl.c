@@ -69,7 +69,7 @@ static struct {
 
 static void pad_rumble_frame(void);
 
-#ifdef WMMT_WIN
+#if defined(WMMT_WIN) || defined(WMMT_MACOS)
 int gl_load(void); /* build.py's generated lookup of the GL functions */
 #endif
 #ifdef WMMT_WIN
@@ -638,8 +638,8 @@ static int game(void *arg) {
    * Pi's GPU have no use for them (and a software renderer cannot pay for them): off there, unless MT3DX_HQ=1; MT3DX_HQ=0
    * turns them off on a PC too. */
   int hq = 1;
-#if defined(__aarch64__) || defined(__arm__)
-  hq = 0;
+#if (defined(__aarch64__) || defined(__arm__)) && !defined(WMMT_MACOS)
+  hq = 0; /* (the Pi's GPU: Apple silicon runs the desktop effects) */
 #endif
   if (CRT.on) hq = 0;
   if (getenv("MT3DX_HQ")) hq = atoi(getenv("MT3DX_HQ")) != 0;
@@ -1214,7 +1214,12 @@ int main(int argc, char **argv) {
     wheel_diag_dir(P.save_dir);
   }
   P.mx = SDL_CreateMutex();
+#ifdef WMMT_MACOS
+  /* macOS has no OpenGL ES: the game's GLES2 calls run over the desktop 2.1 profile
+   * (platform/macos/gl_mac.c), asked for below */
+#else
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+#endif
   SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
   SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
   SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
@@ -1271,9 +1276,14 @@ int main(int argc, char **argv) {
     fprintf(stderr, "window made through EGL\n");
     P.via_egl = 1;
   }
-  /* OpenGL ES 3 where there is, else 2 */
+  /* OpenGL ES 3 where there is, else 2 (macOS: the legacy 2.1 profile, the newest with
+   * the GLSL the game's shaders are written in) */
+#ifdef WMMT_MACOS
+  static const int versions[1][2] = { { 2, 1 } };
+#else
   static const int versions[2][2] = { { 3, 0 }, { 2, 0 } };
-  for (int v = 0; v < 2 && !P.ctx; ++v) {
+#endif
+  for (int v = 0; v < (int)(sizeof versions / sizeof versions[0]) && !P.ctx; ++v) {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, versions[v][0]);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, versions[v][1]);
     P.ctx = SDL_GL_CreateContext(P.win);
@@ -1287,7 +1297,7 @@ int main(int argc, char **argv) {
                              NULL);
     return 1;
   }
-#ifdef WMMT_WIN
+#if defined(WMMT_WIN) || defined(WMMT_MACOS)
   { /* no GL library to link: the entry points are looked up in the driver (build.py's trampolines) */
     int missing = gl_load();
     if (missing) fprintf(stderr, "%d GL functions missing from the driver\n", missing);
@@ -1491,7 +1501,11 @@ int main(int argc, char **argv) {
   SDL_Quit();
   if (P.log_file[0]) { /* (the log closed and scrubbed of public addresses, room codes and user names: it is attached to bug reports) */
     fflush(stderr);
+#ifdef _WIN32
     if (freopen("NUL", "w", stderr)) log_scrub_file(P.log_file);
+#else
+    if (freopen("/dev/null", "w", stderr)) log_scrub_file(P.log_file);
+#endif
   }
 #ifdef __linux__
   /* the console (the game run by its systemd service, as the Pi's: INVOCATION_ID) shuts down with EXIT; a player run by hand just closes */
