@@ -1496,7 +1496,7 @@ void render_begin(const render_params *p) {
  * SIGGRAPH 2014) added in the composite, which rolls the highlights off (FS_BLUR's HQ). The
  * ES3 entry points are looked up: gl.h is the ES2 header. ---- */
 #define HQ_LEVELS 4
-#define HQ_LEVELS_N 8 /* render_hq_level's */
+#define HQ_LEVELS_N 10 /* render_hq_level's */
 typedef void (*hq_blit_fn)(GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLbitfield, GLenum);
 typedef void (*hq_rbms_fn)(GLenum, GLsizei, GLenum, GLsizei, GLsizei);
 typedef void (*hq_inval_fn)(GLenum, GLsizei, const GLenum *);
@@ -1943,6 +1943,7 @@ void render_ssao(float k) {
 static const struct { float scale; int samples, bloom, ao, env; } HQ_LEVEL[HQ_LEVELS_N] = {
   { 1.0f, 0, 1, 1, 1 },   { 1.0f, 0, 1, 0, 1 },   { 0.9f, 0, 1, 0, 1 },   { 0.84f, 0, 1, 0, 1 },
   { 0.84f, 2, 1, 0, 1 },  { 0.75f, 2, 1, 0, 1 },  { 0.75f, 2, 0, 0, 1 },  { 0.75f, 2, 0, 0, 0 },
+  { 0.66f, 2, 0, 0, 0 },  { 0.58f, 2, 0, 0, 0 }, /* (a weak GPU's last resorts: a Mali-G52 sat at 38 fps on level 7) */
 };
 
 int render_hq_level(int level) {
