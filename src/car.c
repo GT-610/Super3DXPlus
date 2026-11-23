@@ -745,12 +745,18 @@ static int phys_have; /* read_phys has a last frame's velocity to work from */
  * transmission goes back to SetFirst's gear, 2nd, and the driver's gear was lost: 4th became 2nd after the scene, issue 41). Kept from the last running step and put back in
  * the engine (and the manual's lever) for as long as the countdown runs. */
 static struct { int running, keep, active; } GK;
+/* A story select's second race starts as a new race after its movie (car_start twice), but the driver is still the one who was in the first race's gear (issue 41,
+ * chapter 15: 4th before the scene, 2nd after): the gear the first race ended in, held through the second one's countdown like GK's. 0 none. */
+static int CARRY, CARRY_LIVE; /* (live: a race has started since it was kept: the first one's last steps do not use it up) */
+void car_carry_gear(int on) { CARRY = on && GK.keep >= 1 ? GK.keep : 0; }
 
 int car_start(car_state *c, int course, int manual, const car_spec *spec) {
   /* a fresh arcade memory image per race, like a fresh boot of CSeq::Init */
   P.ready = 0;
   phys_have = 0;
   memset(&GK, 0, sizeof GK);
+  CARRY_LIVE = CARRY != 0;
+  if (CARRY) GK.keep = CARRY, GK.active = 1;
   if (course < 0|| course >= CAR_COURSES || rc_load_image(P.image) != 0) return -1;
   P.course = course;
   P.manual = manual != 0;
@@ -1768,7 +1774,14 @@ void car_update(car_state *c, const car_input *in) {
   }
   { /* the gear kept through a restart (see GK) */
     const int running = c->race.play_state == 2 && c->race.countdown <= 0.0f;
-    if (running) GK.running = 1, GK.keep = gear, GK.active = 0;
+    if (CARRY && CARRY_LIVE) { /* the story's second race: the gear the first one ended in, from the first step, whether or not a countdown runs */
+      if (gear != CARRY) {
+        fprintf(stderr, "gear: a story select's next race starts in %d, the first one ended in %d (the countdown %.1f, play state %d): keeping %d\n", gear, CARRY, (double)c->race.countdown, c->race.play_state, CARRY);
+        W32(P.m + M_ENGINE + 0x3c, (uint32_t)CARRY), gear = CARRY;
+        if (P.manual) P.lever = CARRY - 1 > P.top_lever ? P.top_lever : CARRY - 1;
+      }
+    }
+    if (running) GK.running = 1, GK.keep = gear, GK.active = 0, CARRY = CARRY_LIVE ? 0 : CARRY;
     else if (GK.running && c->race.countdown > 0.0f && c->race.play_state <= 2 && GK.keep >= 1) {
       GK.running = 0, GK.active = 1;
       fprintf(stderr, "gear: the race went back to a countdown in gear %d (the engine's now %d, the lever %d): keeping %d\n", GK.keep, gear, P.lever + 1, GK.keep);

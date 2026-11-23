@@ -5164,6 +5164,7 @@ void app_frame(float dt) {
       snd_quiet();
       hud_init(&G.hud, G.hud.screen_w, G.hud.screen_h);
       G.story_race = 0;
+      car_carry_gear(0);
       menu_ending_done(&G.menu);
       G.in_menu = 1;
       if (G.perf) fflush(G.perf);
@@ -5187,6 +5188,7 @@ void app_frame(float dt) {
       else if (now_ms() - t0 > after * 1000.0) {
         fprintf(stderr, "test: leaving the race after %d s\n", after);
         G.story_race = 0;
+        car_carry_gear(0);
         hud_init(&G.hud, G.hud.screen_w, G.hud.screen_h);
         G.in_menu = 1;
         if (G.perf) fflush(G.perf);
@@ -5203,6 +5205,7 @@ void app_frame(float dt) {
        * over from its first race) */
       G.paused = 0;
       G.story_race = 0;
+      car_carry_gear(0);
       hud_init(&G.hud, G.hud.screen_w, G.hud.screen_h);
       G.in_menu = 1;
       if (G.perf) fflush(G.perf);
@@ -5480,10 +5483,12 @@ void app_frame(float dt) {
       menu_finish_open(&G.menu, goal, NULL);
       menu_finish_story(&G.menu, race->won, next >= 0, race->gap, fade, race->total);
       if (next >= 0) {
+        car_carry_gear(1);
         G.story_race++;
         menu_story_song(&G.menu, G.story_race);
       } else {
         G.story_race = 0;
+        car_carry_gear(0);
         /* the points first: whether the episode was cleared before counts */
         int units = menu_story_points(&G.menu, race->won && RIVALDB[G.rival].select == pick);
         menu_story_lost(&G.menu, race->won && RIVALDB[G.rival].select == pick);

@@ -335,6 +335,8 @@ const char *car_link_ramp_name(int ramp);
  * keeps the time: its limit, the checkpoints' extensions and the goal (car_state.race).
  * Returns 0 on success. */
 int car_start(car_state *c, int course, int manual, const car_spec *spec);
+/* a story select's next race keeps the gear the player was in at the end of this one (on 1), or forget it (0) */
+void car_carry_gear(int on);
 /* Switch between the automatic and manual gearbox on the move. */
 void car_set_manual(car_state *c, int manual);
 /* Put the car back on the road where it is, facing the course in the start's lane (the
