@@ -5443,6 +5443,7 @@ void app_frame(float dt) {
   G.sign_t -= steps;
   if (race->state == CAR_RACE_RUN && race->countdown <= 0.0f) {
     G.top_kmh = fmaxf(G.top_kmh, car_kmh(&G.car));
+    if (getenv("MT3DX_OWNSEL") && G.menu.own_sel < 0 && G.menu.n_own > 0) G.menu.own_sel = atoi(getenv("MT3DX_OWNSEL")) % G.menu.n_own; /* test: a card in hand (the test saves have none) */
     /* the card's mileage */
     if (G.menu.own_sel >= 0 && G.menu.own_sel < G.menu.n_own) G.menu.own[G.menu.own_sel].odo += car_kmh(&G.car) / 3.6 * steps / 60.0;
   }
@@ -5473,10 +5474,11 @@ void app_frame(float dt) {
       /* a select with a second race (clEffStoryType's periods: select 0 runs series 24, then 25
        * against the Z31 and the Blackbird) goes on to it; the last race's WIN moves the story on */
       int pick = G.menu.story_pick;
+      if (getenv("MT3DX_STORY_WIN")) race->won = getenv("MT3DX_STORY_WIN")[0] != '0'; /* test: the race is won (or lost with 0), whatever the rival did */
       int next = race->won && RIVALDB[G.rival].select == pick ? story_next_race(pick, G.story_race) : -1;
       int fade = next >= 0 && pick >= 0 && pick < STORYRACE_SELECTS && G.story_race < 5 ? STORYRACE_FADE[pick][G.story_race] : 0;
       menu_finish_open(&G.menu, goal, NULL);
-      menu_finish_story(&G.menu, race->won, next >= 0, race->gap, fade);
+      menu_finish_story(&G.menu, race->won, next >= 0, race->gap, fade, race->total);
       if (next >= 0) {
         G.story_race++;
         menu_story_song(&G.menu, G.story_race);
@@ -5496,6 +5498,7 @@ void app_frame(float dt) {
         /* getStorySuccessiveVictoryCount: the episodes won in a row */
         short *streak = &G.menu.st_streak_car[G.menu.maker][menu_slot(&G.menu)];
         *streak = cleared ? (short)(*streak < 30000 ? *streak + 1 : *streak) : 0;
+        if (getenv("MT3DX_STORY_STREAK") && cleared) *streak = (short)atoi(getenv("MT3DX_STORY_STREAK")); /* test: this many wins in a row with this one */
         G.menu.finish_streak = *streak; /* (the WIN result's "N WINS") */
         title_race_over(TITLE_STORY, cleared, race, G.race_course, 0);
         garage_save();

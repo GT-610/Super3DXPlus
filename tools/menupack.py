@@ -165,9 +165,12 @@ ANIMS = [
     ("menu_g_st_rival_orange2", None),
     ("menu_g_st_rival_red", None),
     ("menu_g_st_rival_red2", None),
-    # a story race's result (clRaceResultConsole): the advantage row (its first frame), the
-    # tuning points gauge's frame, gauge and title / message
-    ("menu_g_finish_tg_result", 1),
+    # a story race's result (clRaceResultConsole): the advantage row and, from its 20th frame, the TIME row (it was packed as its first frame alone, so the time never showed),
+    # the win streak ("2 WINS": the arcade's own animation, its digits in four colours by how many there are), the tuning points gauge's frame, gauge and title / message
+    ("menu_g_finish_tg_result", None),
+    ("menu_g_finish_tg_result_2", None),  # (the rows and the title 50 px higher, for a result that also has the tuning points gauge and the streak: _2 of menu_g_finish_win too)
+    ("menu_g_finish_win_2", None),
+    ("menu_g_finish_rensyou", None),
     ("menu_g_finish_point_waku", None),
     ("menu_g_finish_st_bar", None),
     ("menu_g_finish_st_moji", None),
@@ -432,6 +435,8 @@ EXTRA += STTUNE_SPRITES + J([0x16cb, 0x16d6, 0x1893, 0x1bc2, *range(2392, 2412)]
 # the result's tuning messages by tuner (src/sttune.h STTUNE_GET) and the advantage's digits (0x93d0260)
 FINISH_ST_SPRITES = J([7916, 7958, 7996, 7997, 7998, 7999, 8000, 8022, 8023, 8024, 8038, 8049, *range(1193, 1203)])
 EXTRA += FINISH_ST_SPRITES
+# the win streak's digits, menu_g_vs_rensyou_g_0..9, r_, s_ and w_ (the animation only holds the ones for its slots; src/menu.c draw_st_result swaps in the rest)
+EXTRA += J(range(3464, 3504))
 # dress-up (src/dressdb.h): the GET screen's level digits, kind titles and the aero sets'
 # names; the change screen's choices (Original shape, Aero set A..C, the gem cars' Aero set,
 # Refuse to change), its plate, its top bar message and tg_bg_1's black stripe (neon)

@@ -426,6 +426,7 @@ typedef struct {
    * message once full (menu_p_finish_result_st_get_*), the advantage (m, > 0 ahead) */
   int st_show, st_prev, st_gain, st_get;
   float st_gap;
+  float st_time; /* the story race's time, s (the WIN result's TIME row) */
   /* the tuning screen (clSeqStTuneThread::clMenuLayout): the values with the step's +1
    * (b8, bc), its gauges' cells, the choice (c4: 1 power) and whether it is fixed (c5), the
    * choice the screen opened on, when the choice last changed (changeTune), each cell's
@@ -671,7 +672,7 @@ void menu_finish_warm(int goal);
  * the time attack's result */
 /* a story race's end: WIN or LOSE; next: won, and the select runs another race (no WIN yet:
  * its fade, then the next race), fade the race's STORYRACE_FADE */
-void menu_finish_story(menu_state *m, int won, int next, float gap, int fade);
+void menu_finish_story(menu_state *m, int won, int next, float gap, int fade, float total);
 /* the story select's race `race` (0 first): its own music (clEffStoryType::getBgm) as the song */
 void menu_story_song(menu_state *m, int race);
 /* after menu_finish_open, for a 10-in-a-row: its end (clTenResult) in place of the time

@@ -19,6 +19,10 @@ Set as environment variables (they do nothing unset, and silence the sound unles
 | `--native-gl` (or `MT3DX_NATIVE_GL=1`, or a `native-gl.txt` beside the exe) | (Windows) keep the driver's own OpenGL ES on an AMD card, which starts on ANGLE otherwise (a build with `WMMT_NO_AUTO_ANGLE=1` never switches) |
 | `MT3DX_INTERP=0\|1` | force smooth motion off or on for this run (it is otherwise on for a screen that is not 60 Hz and in every versus race, unless GAME OPTIONS > GRAPHICS > SMOOTH MOTION is off) |
 | `MT3DX_FAKE_HZ=n` | (PC player) run as on an n Hz display without one: no vsync, paced in software to n frames a second, smooth motion on in races (40 shows a slow screen, 144 a fast one). `MT3DX_INTERP_LOG` buffers its output for this, as a line a frame to an unbuffered stderr cost 20 ms |
+| `MT3DX_STORY_KM=<km>` `MT3DX_STORY_WIN=1\|0` | a story race of this many km, and its result forced to a win (or a loss), to see the end sequence: the result, the tuning points, the tuning work, the mileage |
+| `MT3DX_STORY_UNITS=<n>` | the units of the story's tuning gauge a win earns (20 fills it, and the tuning screen, the tuning work and the mileage tally follow) |
+| `MT3DX_STORY_STREAK=<n>` | the story win streak shown with a won (cleared) episode: 2 to 99999 shows the result's "N WINS" |
+| `MT3DX_OWNSEL=<n>` | the card in hand is this garage car when a race starts with none (the mileage counts for it) |
 | `MT3DX_TITLE=<id>` | the race plate shows this title (1781 is the Japan build's 連荘キング: its キ and グ were the ones to draw wrong) |
 | `MT3DX_INTERP_LOG=n` | log n frames of a race from its 120th: the frame's length, the time it moved the picture by, the steps run, the blend, the drawn car's and camera's place and the eye-to-car distance |
 | `MT3DX_FRAMELOG=n` | (PC player) every race frame's length and where it went (the app's frame, the swap, the hold), n frames from the 600th; `MT3DX_HITCH=<ms>` logs each frame that took longer |

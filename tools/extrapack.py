@@ -26,7 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import headline  # noqa: E402
 import vsdiscs  # noqa: E402
 
-EX_DISC_BASE, EX_TITLE_BASE, OPTION_TEXT_BASE, NAME_GLYPH1_BASE = 110000, 110100, 101900, 108100
+EX_DISC_BASE, EX_TITLE_BASE, OPTION_TEXT_BASE, NAME_GLYPH1_BASE = 116000, 116100, 101900, 108100  # (EX_DISC and EX_TITLE were 110000 and 110100: the Japan build's title glyphs, TITLE_GLYPH1_BASE + k up to 1573, covered them, and the titles' キ and グ drew as the red C and S of an English picture, issue 38; src/menu.c ex_at takes either)
 # main menu, settings, tuning option (menu.c draw_selmenu TEXT[][])
 DISCS = ["Play", "Settings", "Exit", "Game", "Controls", "Sound", "Stock", "Hell's\nTuning",
          # the mode select (8..10), the car's settings (11..14) and the delete question (15, 16)
@@ -37,7 +37,7 @@ DISCS = ["Play", "Settings", "Exit", "Game", "Controls", "Sound", "Stock", "Hell
 TITLES = ["Please select an option", "Settings", "Select your starting point", "Select transmission", "Please select an option", "Car settings",
           "Delete this car?", "Customize", "Select game mode"]
 CLASS_BASE = 107200  # (menu.c CARD_CLASS; CARD_CLASSP is 100 on)
-TEN_BGM_BASE = 110200  # (the 10 out run's soundtracks' names, menu.c EX_TENBGM)
+TEN_BGM_BASE = 116200  # (the 10 out run's soundtracks' names, menu.c EX_TENBGM)
 OPTION_TITLE_ID = OPTION_TEXT_BASE + 10
 OPTION_TITLE = "Game options"
 SS = vsdiscs.SS

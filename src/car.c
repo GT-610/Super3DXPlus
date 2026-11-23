@@ -800,6 +800,7 @@ int car_start(car_state *c, int course, int manual, const car_spec *spec) {
     uint32_t field = rc_alloc(0x40);
     call(f_899b378, 4, field, STORY_CONFIG, 0u, (uint32_t)P.rival[0].series);
     for (int i = 0; i < 6; ++i) W32(cfg + RACE_FIELD + 4 * i, M32(field + 4 * i));
+    if (getenv("MT3DX_STORY_KM")) WF(cfg + CFG_GOAL, MF(cfg + CFG_DIST) + 1000000.0f * (float)atof(getenv("MT3DX_STORY_KM"))); /* test: a story race of this many km */
     fprintf(stderr, "story series %d (loop %d, lost %d): stage %u area %u dist %.0f goal %.0f\n", P.rival[0].series,
             P.rival[0].level, P.rival[0].losses, M32(cfg + CFG_STAGE),
             M32(cfg + CFG_AREA), MF(cfg + CFG_DIST), MF(cfg + CFG_GOAL));

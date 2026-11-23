@@ -93,6 +93,8 @@ static struct {
   int win, lose;  /* a story race's end */
   /* its result's advantage row and tuning points: the gauge's frame, the gauge, the title / message */
   int st_adv, st_waku, st_bar, st_moji;
+  int rensyou; /* the win streak (menu_g_finish_rensyou) */
+  int win2, st_adv2; /* the WIN title and the advantage and time rows 50 px higher (menu_g_finish_win_2, menu_g_finish_tg_result_2): a result with the gauge or the streak under them */
   /* clTaResult's rows: the course, the course's, the car type's and the player's best, the
    * sections, TOTAL TIME, the top speed, the ranking */
   int res_course, res_best[3], res_congrats, res_sections, res_sections2, res_total, res_speed, res_rank;
@@ -5366,7 +5368,7 @@ void menu_finish_vs(menu_state *m, int place, int n, int timeup) {
   for (int id = 2625; id <= 2631; ++id) anm_warm_sprite(anm_sprite(id), 1); /* (menu_finish_draw's places) */
 }
 
-void menu_finish_story(menu_state *m, int won, int next, float gap, int fade) {
+void menu_finish_story(menu_state *m, int won, int next, float gap, int fade, float total) {
   m->finish_story = next ? 3 : won ? 1 : 2;
   m->finish_goal = 1;
   /* clRaceThread::race: the Suspend (play state 10) fades out at once, no FINISH */
@@ -5374,6 +5376,7 @@ void menu_finish_story(menu_state *m, int won, int next, float gap, int fade) {
   m->finish_fade = next ? fade : 0;
   m->st_show = 0; /* menu_story_points sets it */
   m->st_gap = gap;
+  m->st_time = total;
 }
 
 /* The 10-in-a-row's end (clSeqTenResultThread::run 0x89632d0, clTenResult): after a TIME UP
@@ -5694,6 +5697,14 @@ static void st_result_step(const menu_state *m, int t) {
   }
 }
 
+/* a WIN with the tuning points gauge under it or a streak: the arcade draws the title (menu_g_finish_win_2) and the advantage and time rows (menu_g_finish_tg_result_2) 50 px higher than
+ * for one without, the streak's animation then fits between the time row and the gauge's frame; the first ones for a result with neither */
+static int st_use2(const menu_state *m) {
+  return m->finish_story == 1 && ID.win2 >= 0 && ID.st_adv2 >= 0 && anm_frames(ID.st_adv2) > 100 && (m->st_show || m->finish_streak >= 2);
+}
+#define RENSYOU_DY 0.0f
+#define ST_ADV_DY 0.0f
+
 static void draw_st_result(const menu_state *m, int t) {
   t -= st_t0(m);
   if (t >= ST_RES_ADV) {
@@ -5710,22 +5721,62 @@ static void draw_st_result(const menu_state *m, int t) {
     if (m->st_gap > 0)
       for (int k = 0; k < 7; ++k)
         if (d[k] == 10) d[k] = 11;
-    anm_swap sw[7];
+    anm_swap sw[7 + 7 + 1];
     for (int k = 0; k < 7; ++k) {
       sw[k].from = anm_sprite(SLOT[k]);
       sw[k].to = d[k] == 11 ? -1 : anm_sprite(d[k] < 10 ? ADV_DIGIT + d[k] : d[k] == 10 ? T_ADV_MINUS : T_ADV_COMMA);
     }
-    anm_draw_ex(ID.st_adv, 0, 1, 0, 0, sw, 7);
-    /* the win streak (getStorySuccessiveVictoryCount), "111 WINS" under the advantage as the arcade's WIN result has it, from the second in a row */
+    /* From its 20th frame the animation has the TIME row too: the race's time as mm'ss"mmm in seven slots (the minutes' tens blank), and the revenge message of the ghost battle's
+     * result in the same row blank. A data from before had the first frame alone (anm_frames 1): the advantage row and the old text for the streak. */
+    const int full = anm_frames(ID.st_adv) > 100 && ID.rensyou >= 0 && anm_frames(ID.rensyou) > 270;
+    if (full) {
+      static const int TM[7] = { JID(0x183c), JID(0x183d), JID(0x183e), JID(0x183f), JID(0x1840), JID(0x1841), JID(0x1842) };
+      long ms = (long)(m->st_time * 1000.0f + 0.5f);
+      if (ms < 0) ms = 0;
+      if (ms > 99L * 60000L + 59999L) ms = 99L * 60000L + 59999L;
+      const int mn = (int)(ms / 60000), sc = (int)(ms / 1000 % 60), ml = (int)(ms % 1000);
+      const int td[7] = { mn >= 10 ? mn / 10 : -1, mn % 10, sc / 10, sc % 10, ml / 100, ml / 10 % 10, ml % 10 };
+      for (int k = 0; k < 7; ++k) {
+        sw[7 + k].from = anm_sprite(TM[k]);
+        sw[7 + k].to = td[k] < 0 || m->finish_story != 1 ? -1 : anm_sprite(ADV_DIGIT + td[k]);
+      }
+      sw[14] = (anm_swap){ anm_sprite(JID(0x1c88)), -1 }; /* (menu_p_finish_tg_revenge_mes) */
+      anm_swap tl = { anm_sprite(JID(2301)), -1 }; /* (menu_p_finish_time, the row's label: only a WIN shows the time) */
+      anm_swap all[16];
+      memcpy(all, sw, sizeof sw);
+      all[15] = tl;
+      anm_draw_ex(st_use2(m) ? ID.st_adv2 : ID.st_adv, t - ST_RES_ADV < 119 ? t - ST_RES_ADV : 119, 1, 0, ST_ADV_DY, all, m->finish_story == 1 ? 15 : 16);
+    } else {
+      anm_draw_ex(ID.st_adv, 0, 1, 0, 0, sw, 7);
+    }
+    /* the win streak (getStorySuccessiveVictoryCount): "2 WINS" under the time as the arcade's WIN result has it, from the second in a row. menu_g_finish_rensyou is the arcade's own: a
+     * block of frames for each count of digits (5 and 4: gold, 3: silver, 2: red, 1: white), each digit's picture in its slot (the slots are the pictures of the colour's digits 0, 1 .. in
+     * a row, swapped here for the digit's own), the digits coming in one by one and the word WINS after them */
     if (m->finish_story == 1 && m->finish_streak >= 2) {
-      float r[4], al, y = 200.0f;
-      if (anm_sprite_rect_at(ID.st_adv, 0, anm_sprite(T_ADV_D4), 0, r, &al)) y = r[3] + 12.0f;
-      char s[16];
-      snprintf(s, sizeof s, "%d", m->finish_streak > 99999 ? 99999 : m->finish_streak);
-      const float a = t - ST_RES_ADV >= 20 ? 1.0f : (float)(t - ST_RES_ADV + 1) / 20.0f;
-      float x = 320.0f - 0.5f * (ex_width(5, s) + 10.0f + ex_width(5, "WINS"));
-      x = ex_text(5, s, x, y, a);
-      ex_text(5, "WINS", x + 10.0f, y, a);
+      const int v = m->finish_streak > 99999 ? 99999 : m->finish_streak;
+      const int nd = v > 9999 ? 5 : v > 999 ? 4 : v > 99 ? 3 : v > 9 ? 2 : 1;
+      if (full) {
+        static const int RS_FROM[6] = { 0, 229, 180, 134, 79, 19 }, RS_TO[6] = { 0, 274, 223, 174, 128, 74 };
+        const int base = nd == 1 ? JID(3494) : nd == 2 ? JID(3474) : nd == 3 ? JID(3484) : JID(3464); /* (w, r, s, g) */
+        const int rt = t - ST_RES_ADV - 38; /* (the TIME row is in at 20 and the digits follow it in the arcade's: about 0.6 s after the advantage) */
+        if (rt >= 0) {
+          anm_swap rs[5];
+          int dig[5], q = v;
+          for (int k = nd - 1; k >= 0; --k) dig[k] = q % 10, q /= 10;
+          for (int k = 0; k < nd; ++k) rs[k] = (anm_swap){ anm_sprite(base + k), anm_sprite(base + dig[k]) };
+          const int f = RS_FROM[nd] + (rt < RS_TO[nd] - RS_FROM[nd] ? rt : RS_TO[nd] - RS_FROM[nd]);
+          anm_draw_ex(ID.rensyou, f, 1, 0, RENSYOU_DY, rs, nd);
+        }
+      } else {
+        float r[4], al, y = 200.0f;
+        if (anm_sprite_rect_at(ID.st_adv, 0, anm_sprite(T_ADV_D4), 0, r, &al)) y = r[3] + 12.0f;
+        char sn[16];
+        snprintf(sn, sizeof sn, "%d", v);
+        const float a = t - ST_RES_ADV >= 20 ? 1.0f : (float)(t - ST_RES_ADV + 1) / 20.0f;
+        float x = 320.0f - 0.5f * (ex_width(5, sn) + 10.0f + ex_width(5, "WINS"));
+        x = ex_text(5, sn, x, y, a);
+        ex_text(5, "WINS", x + 10.0f, y, a);
+      }
     }
   }
   if (!m->st_show || t < ST_RES_GAUGE) return;
@@ -5875,7 +5926,7 @@ void menu_finish_draw(const menu_state *m) {
     anm_swap sw[2] = { { anm_sprite(JID(0xa44)), anm_sprite(PLACE[place - 1]) }, { anm_sprite(JID(0xa47)), anm_sprite(OF[n]) } };
     anm_draw_ex(ID.finish_vs >= 0 ? ID.finish_vs : ID.win, f, 1, 0, 0, sw, 2);
   } else if (m->finish_story == 1 || m->finish_story == 2) {
-    int a = m->finish_story == 1 ? ID.win : ID.lose, len = m->finish_story == 1 ? anm_frames(a) : ST_LOSE_LEN;
+    int a = m->finish_story == 1 ? (st_use2(m) ? ID.win2 : ID.win) : ID.lose, len = m->finish_story == 1 ? anm_frames(a) : ST_LOSE_LEN;
     anm_draw(a, t < len ? t : len - 1, 1);
     draw_st_result(m, t);
   } else if (m->finish_story == 4) draw_ten_result();
@@ -5910,8 +5961,8 @@ void menu_finish_warm(int goal) {
     const int anims[10] = { ID.finish[1], ID.res_course, ID.res_best[0], ID.res_best[1], ID.res_best[2],
                             ID.res_congrats, ID.res_sections, ID.res_total, ID.res_speed, ID.res_rank };
     int sprites[MAX_WARM];
-    const int story[6] = { ID.win, ID.lose, ID.st_adv, ID.st_waku, ID.st_bar, ID.st_moji };
-    for (int a = 0; a < (g == 2 ? 6 : g ? 10 : 1); ++a) {
+    const int story[9] = { ID.win, ID.lose, ID.st_adv, ID.st_waku, ID.st_bar, ID.st_moji, ID.rensyou, ID.win2, ID.st_adv2 };
+    for (int a = 0; a < (g == 2 ? 9 : g ? 10 : 1); ++a) {
       int ns = anm_sprites(g == 2 ? story[a] : g ? anims[a] : ID.finish[0], sprites, MAX_WARM);
       /* the digits and the names right after FINISH */
       if (g == 1 && a == 1)
@@ -6352,7 +6403,7 @@ static void poem_leave(menu_state *m) {
     ending_open(m);
     return;
   }
-  if (tg_due(m)) return;
+  if (tg_due(m) || milage_enter(m, 1)) return; /* (the mileage tally before Continue?, after the story screens too: issue 22) */
   go(m, MENU_GAME);
   m->sel = game_slot(MENU_GAME_STORY);
   m->slide = m->card_t = 0;
@@ -6471,7 +6522,7 @@ void menu_ending_done(menu_state *m) {
     bonus_next(m);
     return;
   }
-  if (tg_due(m)) return;
+  if (tg_due(m) || milage_enter(m, 1)) return; /* (the mileage tally before Continue?, after the story screens too: issue 22) */
   go(m, MENU_GAME);
   m->sel = game_slot(MENU_GAME_STORY);
   m->slide = m->card_t = 0;
@@ -6513,7 +6564,7 @@ static void bonus_step(menu_state *m, const menu_in *in) {
         bonus_next(m);
         return;
       }
-      if (tg_due(m)) return;
+      if (tg_due(m) || milage_enter(m, 1)) return;
       go(m, MENU_GAME);
       m->sel = game_slot(MENU_GAME_STORY);
       m->slide = m->card_t = 0;
@@ -6603,6 +6654,7 @@ static void menu_aura_of(const menu_state *m, menu_car *c) {
 /* the tally in place of the way to the title, when a card drove a km this time */
 static int milage_enter(menu_state *m, int after_race) {
   int k = milage_card(m);
+  if (getenv("MT3DX_LOG")) fprintf(stderr, "milage: card %d (the one in hand %d of %d), option %d, after a race %d%s\n", k, m->own_sel, m->n_own, m->milage_on, after_race, k >= 0 ? "" : ": no card drove a km this time");
   if (k < 0) return 0;
   if (!m->milage_on) { /* (skipped in the options: what was driven is counted in all the same) */
     for (int i = 0; i < m->n_own; ++i) m->own[i].odo0 = m->own[i].odo;
@@ -6738,6 +6790,7 @@ int menu_story_points(menu_state *m, int won) {
   } else {
     u = cleared || !won ? 0 : 1;
   }
+  if (getenv("MT3DX_STORY_UNITS") && won) u = atoi(getenv("MT3DX_STORY_UNITS")); /* test: this many units of the tuning gauge won (20 fills it: the tuning screen follows) */
   /* the result shows the gauge but past 33 steps, and in a later loop only when it gains */
   m->st_show = t <= 33 && (st_loop(m) == 0 || u);
   m->st_gain = m->st_prev + u * 50 > 1000 ? 1000 - m->st_prev : u * 50;
@@ -7483,6 +7536,9 @@ void menu_init(menu_state *m) {
   ID.win = anm_find("menu_g_finish_win");
   ID.lose = anm_find("menu_g_finish_lose");
   ID.st_adv = anm_find("menu_g_finish_tg_result");
+  ID.rensyou = anm_find("menu_g_finish_rensyou");
+  ID.win2 = anm_find("menu_g_finish_win_2");
+  ID.st_adv2 = anm_find("menu_g_finish_tg_result_2");
   ID.st_waku = anm_find("menu_g_finish_point_waku");
   ID.st_bar = anm_find("menu_g_finish_st_bar");
   ID.st_moji = anm_find("menu_g_finish_st_moji");
@@ -9726,30 +9782,30 @@ static void eff_open(menu_state *m, int power, int p0) {
   if (power) {
     switch (p) {
     case 1:
-      if (f->gem) *pose = 1, *a = f->na ? 0x238 : 0x239;
-      else if (f->r2) m->eff.parts = TUNE_PARTS_SWAP, *pose = 3, *a = 0x23b;
-      else if (f->hiace) *pose = 1, *a = 0x23c;
+      if (f->gem) *pose = 1, *a = STEFF_ANIM + (f->na ? 6 : 7); /* (the install animes are counted from the build's own first id: it is 0x232 in the Japan build, 0x23d in the Export one) */
+      else if (f->r2) m->eff.parts = TUNE_PARTS_SWAP, *pose = 3, *a = STEFF_ANIM + 9;
+      else if (f->hiace) *pose = 1, *a = STEFF_ANIM + 10;
       break;
     case 2:
       if (f->gem) m->eff.parts = TUNE_PARTS_ENGINE;
       break;
     case 4: case 10:
-      if (f->gem) *pose = 7, *a = 0x23d;
+      if (f->gem) *pose = 7, *a = STEFF_ANIM + 11;
       break;
     case 3: case 5: case 6: case 7: case 8: case 9:
-      if (f->m12) *pose = 1, *a = 0x238;
-      if (f->m11) *pose = 1, *a = 0x23a;
-      if (f->hiace) *a = 0x23c;
+      if (f->m12) *pose = 1, *a = STEFF_ANIM + 6;
+      if (f->m11) *pose = 1, *a = STEFF_ANIM + 8;
+      if (f->hiace) *a = STEFF_ANIM + 10;
       break;
     }
   } else {
-    if (h == 4 && f->hilift) *a = 0x237;
-    if (h == 7 && f->m0f) *pose = 3, *a = 0x23b;
+    if (h == 4 && f->hilift) *a = STEFF_ANIM + 5;
+    if (h == 7 && f->m0f) *pose = 3, *a = STEFF_ANIM + 9;
   }
   /* and by T: 21, 25..27, 29 */
   if (t == 21 || t == 25 || t == 26 || t == 27 || t == 29) {
-    if (f->m11) *pose = 1, *a = 0x23a;
-    if (f->m12) *pose = 1, *a = 0x238;
+    if (f->m11) *pose = 1, *a = STEFF_ANIM + 8;
+    if (f->m12) *pose = 1, *a = STEFF_ANIM + 6;
   }
   m->eff.power = power;
   m->eff.total = t;
@@ -12066,7 +12122,7 @@ int menu_update(menu_state *m, float dt) {
           poem_open(m);
         } else if (m->ending == 1) {
           ending_open(m);
-        } else if (!tg_due(m)) {
+        } else if (!tg_due(m) && !milage_enter(m, 1)) { /* (the mileage tally comes after the tuning work too, before Continue?: the arcade's order; it was left out here and shown only after a race with no tuning, issue 22) */
           go(m, MENU_GAME);
           m->sel = game_slot(MENU_GAME_STORY);
           m->slide = m->card_t = 0;
