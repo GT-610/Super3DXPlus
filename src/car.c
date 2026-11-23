@@ -753,13 +753,14 @@ void car_carry_gear(int on) { CARRY = on && GK.keep >= 1 ? GK.keep : 0; }
 /* The black box (always on, a few lines at most): a race step where the car turns more than 3.4 degrees in one step (200 degrees a second) or the eye moves by more than 0.3 m
  * against the car writes the 45 steps before it and the 45 after to the log, as "bb" lines (the car's place, heading, speed, the steering as read and as given, the eye,
  * the nearest traffic car, the wall, the slip), to see what was behind a sudden swing of the view (the car, the camera or the traffic). At most 6 times a race. */
-typedef struct { float t, pos[3], yaw, spd, st_in, st, eye[3], dtraf, wall, slip; int ps; } bb_rec;
-static struct { int n, post, quiet, dumps, head, count; float rel[3], yaw; bb_rec r[45]; } BB;
+typedef struct { float t, pos[3], yaw, spd, st_in, st, eye[3], raw[3], fx[4], dtraf, wall, slip; int ps; } bb_rec;
+static float RAWCAM[3]; /* the arcade's camera place of this frame before the shake filter (the world's) */
+static struct { int n, post, quiet, dumps, head, count, view; float rel[3], yaw; bb_rec r[45]; } BB;
 
 static void bb_line(const char *tag, int k) {
   const bb_rec *e = &BB.r[k];
-  fprintf(stderr, "bb%s t=%.2f pos=%.1f,%.1f,%.1f yaw=%.3f spd=%.1f in=%.2f st=%.2f eye=%.1f,%.1f,%.1f traf=%.1f wall=%.2f slip=%.3f ps=%d\n", tag, (double)e->t, (double)e->pos[0], (double)e->pos[1],
-          (double)e->pos[2], (double)e->yaw, (double)e->spd, (double)e->st_in, (double)e->st, (double)e->eye[0], (double)e->eye[1], (double)e->eye[2], (double)e->dtraf, (double)e->wall,
+  fprintf(stderr, "bb%s t=%.2f pos=%.1f,%.1f,%.1f yaw=%.3f spd=%.1f in=%.2f st=%.2f eye=%.1f,%.1f,%.1f raw=%.1f,%.1f,%.1f fx=%.2f,%.2f,%.2f,%.2f traf=%.1f wall=%.2f slip=%.3f ps=%d\n", tag, (double)e->t, (double)e->pos[0], (double)e->pos[1],
+          (double)e->pos[2], (double)e->yaw, (double)e->spd, (double)e->st_in, (double)e->st, (double)e->eye[0], (double)e->eye[1], (double)e->eye[2], (double)e->raw[0], (double)e->raw[1], (double)e->raw[2], (double)e->fx[0], (double)e->fx[1], (double)e->fx[2], (double)e->fx[3], (double)e->dtraf, (double)e->wall,
           (double)e->slip, e->ps);
 }
 
@@ -778,7 +779,8 @@ static void bb_step(const car_state *c) {
   for (int k = 0; k < 3; ++k) rel[k] = c->cam_pos[k] - c->pos[k];
   while (dyaw > 3.14159265f) dyaw -= 6.2831853f;
   while (dyaw < -3.14159265f) dyaw += 6.2831853f;
-  const int warm = BB.n++ > 30;
+  const int warm = BB.n++ > 30 && c->view == BB.view; /* (a change of view is a cut, not a jump) */
+  BB.view = c->view;
   float jump = sqrtf((rel[0] - BB.rel[0]) * (rel[0] - BB.rel[0]) + (rel[1] - BB.rel[1]) * (rel[1] - BB.rel[1]) + (rel[2] - BB.rel[2]) * (rel[2] - BB.rel[2]));
   BB.yaw = c->yaw;
   memcpy(BB.rel, rel, sizeof rel);
@@ -787,6 +789,8 @@ static void bb_step(const car_state *c) {
   memcpy(e->pos, c->pos, sizeof e->pos);
   e->yaw = c->yaw, e->spd = c->speed * 3.6f, e->st_in = c->steer_in, e->st = c->steer;
   memcpy(e->eye, c->cam_pos, sizeof e->eye);
+  memcpy(e->raw, RAWCAM, sizeof e->raw);
+  memcpy(e->fx, c->camfx, sizeof e->fx);
   e->dtraf = dtraf > 1e8f ? -1.0f : dtraf, e->wall = c->wall_hit, e->slip = c->phys.slip_body, e->ps = c->race.play_state;
   BB.head = (BB.head + 1) % 45;
   if (BB.count < 45) ++BB.count;
@@ -1116,6 +1120,7 @@ static void read_camera(car_state *c) {
   memcpy(c->cam_view, VA(P.cam), sizeof c->cam_view);
   const float *V = c->cam_view;
   for (int j = 0; j < 3; j++) c->cam_pos[j] = -(V[12] * V[4 * j] + V[13] * V[4 * j + 1] + V[14] * V[4 * j + 2]);
+  memcpy(RAWCAM, c->cam_pos, sizeof RAWCAM);
   shake_filter(c);
   c->cam_fov = MF(P.cam + 0x40);
   c->cam_near = MF(P.cam + 0x44);
