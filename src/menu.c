@@ -1436,11 +1436,6 @@ static void vs_day_step(menu_state *m, const menu_in *in) {
     go(m, MENU_VS);
     return;
   }
-  { /* the result of the time zone vote comes with the sound of a decision (the start's) */
-    static int said;
-    if (m->vs.day_final < 0) said = 0;
-    else if (!said) said = 1, snd_menu(SND_START);
-  }
   m->vs.day_t++;
   if (m->vs.day_final >= 0) {
     if (m->zone != m->vs.day_final && !m->slide) m->zone = m->vs.day_final, m->card_t = 0;
@@ -10700,7 +10695,6 @@ static void vs_area_step(menu_state *m, const menu_in *in) {
   }
   if (m->vs.move_t < AREA_MOVE && m->vs.item_from >= 0 && ++m->vs.move_t >= AREA_MOVE) m->vs.item_from = -1;
   if (m->vs.area_final >= 0) {
-    if (m->vs.final_t == 0) snd_menu(SND_START); /* (the area is decided) */
     if (m->vs.final_t == 0 && m->vs.item != m->vs.area_final) {
       /* the strip jumps to the result: its place and scroll as the cursor's walk there */
       m->vs.item = m->vs.area_final;

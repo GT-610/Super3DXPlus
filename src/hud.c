@@ -1360,7 +1360,7 @@ static void draw_vs_place(const car_race *r) {
 /* a font's glyphs centred (datrums 9) on a template of a frame drawn at (dx, dy) * zoom: cells
  * of `cell` px drawn `out` px, advances half or full */
 static void vs_text(int anim, int frame, int tmpl, int base, const unsigned short *g, const unsigned char *half, int n,
-                    float cell, float out, float adv_half, float adv_full, float dx, float dy, float zoom) {
+                    float cell, float out, float adv_half, float adv_full, float dx, float dy, float zoom, float yoff) {
   float r[4], w = 0;
   if (n <= 0 || !anm_sprite_rect(anim, frame, anm_sprite(tmpl), r)) return;
   for (int i = 0; i < n; ++i) w += half[i] ? adv_half : adv_full;
@@ -1368,7 +1368,7 @@ static void vs_text(int anim, int frame, int tmpl, int base, const unsigned shor
   for (int i = 0; i < n; ++i) {
     int s = anm_sprite(base + g[i]);
     float src[4] = { 0, 0, cell, cell };
-    float dst[4] = { dx + zoom * x, dy + zoom * r[1], dx + zoom * (x + out), dy + zoom * (r[1] + out) };
+    float dst[4] = { dx + zoom * x, dy + zoom * (r[1] + yoff), dx + zoom * (x + out), dy + zoom * (r[1] + yoff + out) };
     if (s >= 0) anm_draw_part(s, src, dst, 1);
     x += half[i] ? adv_half : adv_full;
   }
@@ -1425,12 +1425,27 @@ static void draw_vs_box(int i, float gap) {
     g[len] = (unsigned short)b->name[k];
     half[len++] = NAMEDB_WCHAR[b->name[k]] <= 0x7f;
   }
-  vs_text(a, frame, T_VS_NAME, name_font1() ? PLATE_NAME_GLYPH1 : PLATE_NAME_GLYPH, g, half, len, name_font1() ? 20 : 32, 20, 8, 16, dx, dy, zoom);
+  vs_text(a, frame, T_VS_NAME, name_font1() ? PLATE_NAME_GLYPH1 : PLATE_NAME_GLYPH, g, half, len, name_font1() ? 20 : 32, 20, 8, 16, dx, dy, zoom, 0.0f);
   const unsigned short *tg;
-  len = title_glyphs(b->title > 0 ? b->title : TITLE_FIRST, &tg);
+  len = title_glyphs(getenv("MT3DX_VSBOXTITLE") ? atoi(getenv("MT3DX_VSBOXTITLE")) : b->title > 0 ? b->title : TITLE_FIRST, &tg); /* (test: MT3DX_VSBOXTITLE=<id>: every versus box shows this title) */
   if (len > 32) len = 32;
   for (int k = 0; k < len; ++k) g[k] = tg[k], half[k] = (unsigned char)title_glyph_half(tg[k]);
-  vs_text(a, frame, T_VS_TITLE, PLATE_TITLE_GLYPH, g, half, len, 20, 15, 7, 11, dx, dy, zoom);
+  { /* a two-line title (the English ones' line break, a slash glyph) is two lines, each smaller, one over the other in the title's place, not one long line with the slash in it */
+    int brk = -1;
+    for (int k = 0; k < len && brk < 0; ++k)
+      if (title_glyph_slash(tg[k])) brk = k;
+    if (brk < 0) {
+      vs_text(a, frame, T_VS_TITLE, PLATE_TITLE_GLYPH, g, half, len, 20, 15, 7, 11, dx, dy, zoom, 0.0f);
+    } else {
+      unsigned short g2[32];
+      unsigned char h2[32];
+      int n2 = 0;
+      for (int k = brk + 1; k < len; ++k)
+        if (!title_glyph_slash(tg[k])) g2[n2] = tg[k], h2[n2++] = (unsigned char)title_glyph_half(tg[k]);
+      vs_text(a, frame, T_VS_TITLE, PLATE_TITLE_GLYPH, g, half, brk, 20, 10, 5, 7.5f, dx, dy, zoom, -3.0f);
+      vs_text(a, frame, T_VS_TITLE, PLATE_TITLE_GLYPH, g2, h2, n2, 20, 10, 5, 7.5f, dx, dy, zoom, 7.5f);
+    }
+  }
   /* the player's ping under the advantage (online and LAN: its round trip to the host as its packets carry it): P: 21, green to 75 ms, yellow to 120, orange to 200, red over */
   int ping = ping_on ? net_ping_ms(b->seat) : -1;
   float pr[4];
