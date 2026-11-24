@@ -661,10 +661,10 @@ static int game(void *arg) {
     return 0;
   }
   if (P.fs_cli) app_set_fullscreen(1); /* (the command line over the saved mode) */
-#if !defined(__aarch64__) && !defined(__arm__)
 #ifdef WMMT_MACOS
-  app_loader_row(1);
+  app_loader_row(1); /* (BACKGROUND LOADING: the Mac is arm64 too, outside the block below) */
 #endif
+#if (!defined(__aarch64__) && !defined(__arm__)) || defined(WMMT_MACOS)
   if (!CRT.on) app_window_row(1); /* the game options get a WINDOW MODE row (the Pi's kiosk has no windows) */
 #ifdef _WIN32
   app_firewall_row(1); /* (the versus lobby's ALLOW THROUGH FIREWALL) */
