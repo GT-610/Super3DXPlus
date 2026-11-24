@@ -1171,11 +1171,24 @@ int main(int argc, char **argv) {
     }
     fclose(f);
   }
-  if (save == base_save) {
+  if (save) { /* (the save folder is made, the default one and a --save one alike, with the folders above it: a --save that did not exist yet kept nothing, not the records, not the options) */
+    char tmp[1100];
+    snprintf(tmp, sizeof tmp, "%s", save);
+    for (char *p = tmp + 1; *p; ++p) {
+      if (*p != '/' && *p != '\\') continue;
+      char c = *p;
+      *p = 0;
 #ifdef _WIN32
-    _mkdir(save);
+      if (!(p > tmp && p[-1] == ':')) _mkdir(tmp);
 #else
-    mkdir(save, 0755);
+      mkdir(tmp, 0755);
+#endif
+      *p = c;
+    }
+#ifdef _WIN32
+    _mkdir(tmp);
+#else
+    mkdir(tmp, 0755);
 #endif
   }
   /* a desktop window opens at a size worth looking at (the layout is 4:3); --size, the CRT and the Pi's fullscreen set their own */
