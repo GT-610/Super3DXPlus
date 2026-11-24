@@ -2,8 +2,9 @@
 
 This is an accessibility-focused native port of *Wangan Midnight Maximum Tune 3DX+* with extensive controller support, native wheel support, and a new console-style frontend. It is based on the static recompilation work of [Re3DX+](https://github.com/Allannn-sudo). The player was rebuilt on SDL2 alongside the original Android player. It supports both the Japan and Export (English) versions of the game, and runs on:
 
-- PC (Windows / Linux / macOS)
+- PC (Windows / Linux)
 - Android
+- MacOS
 - Raspberry Pi
 
 The goal of this project is to allow you to play the game natively, and access its features like car saving/loading without needing to run several additional programs and compatibility layers to do so.
@@ -134,9 +135,10 @@ Only tested on a Raspberry Pi 5 (8 GB). Other models should work with simple con
 - Ghost VS. Battle / Crowns (lack of interest - Re3DX+ is strictly native, doesn't use a server to sync crowns, so it would be quite boring.)
 
 **Known bugs:**
-- Menu slider animations are buggy in some cases.
+- Bumper/roof camera does not work with unlocked framerates. This is due to massive instability and game breaking bugs it was causing, so this will present at the original 60hz update rate for now. In the future it is going to require rebuilding from the ground up in order to get it working in a stable way.
+- Menu slider animations are buggy.
 - Sometimes, VS battles will hang at the start of a race indefinitely. This issue is hard to reproduce, but if you encounter it, please close the game and upload the log.txt from both machines to the issues page.
-- Headlight flare positions for story rival cars are incorrect.
+- Headlight flare positions for story rival cars in 10 Outrun are incorrect.
 
 **Oversights:**
 - The Japan build has been tested much less than the Export build, because I can't read Japanese. Please submit an issue if you encounter any issues with the text, with as much information as possible.
