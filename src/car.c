@@ -1086,7 +1086,7 @@ static struct {
 } SK;
 
 void car_shake(int tenths) { shake_tenths = tenths < 0 ? 0 : tenths > 10 ? 10 : tenths; }
-static int shake_slow, slow_rej, slow_warm, far_n, init_n;
+static int shake_slow, slow_rej, slow_warm, far_n, init_n, init_wait; /* (init_wait: the steps the arcade's camera has gone on moving since the cut, see shake_filter) */
 static float init_off[12][3], init_ax[12][3][3]; /* the samples a first-person lock's rest place is made of (the median of 12) */
 #define FAR_CUT 180 /* steps a far camera stays far before it is taken for a cut (3 s) */ /* (the first-person lock: samples left out in a row, and steps since its rest place was set) */
 void car_shake_slow(int on) { shake_slow = on; } /* (smooth motion's first-person view: the camera's offset and axes follow over about half a second, not a sixth) */
@@ -1131,9 +1131,34 @@ static void shake_filter(car_state *c) {
   /* (and only a sample that stays that far is a cut: at 310 km/h the roof camera's samples jump 2 to 4 m fore and aft for a step or two on a steady road, which the black box
    * showed; each was taken for a cut and the eye went there, and then slid back for seconds. A few steps of far samples are left out, and the eye stays where it was.) */
   const int far = d > 40.0f * 40.0f || fwd < 0.95f;
+  { /* test: MT3DX_SKLOG=1 logs the first-person lock's state every 6th step: where the arcade's camera is against the car (off), the lock's rest place, the roll of the view against the rest's */
+    static int lg = -2, n;
+    if (lg == -2) lg = getenv("MT3DX_SKLOG") != NULL;
+    if (lg && shake_slow && ++n % 6 == 0) {
+      float roll = ax[0][0] * SK.ax[0][0] + ax[0][1] * SK.ax[0][1] + ax[0][2] * SK.ax[0][2];
+      fprintf(stderr, "sk: n %d on %d init_n %d wait %d far_n %d rej %d warm %d off %.1f %.1f %.1f rest %.1f %.1f %.1f d %.1f fwd %.4f rollcos %.4f state %d cd %.2f\n", n, SK.on, init_n, init_wait, far_n, slow_rej, slow_warm, (double)off[0], (double)off[1],
+              (double)off[2], (double)SK.off[0], (double)SK.off[1], (double)SK.off[2], (double)d, (double)fwd, (double)roll, (int)M32(STATE), (double)c->race.countdown);
+    }
+  }
   if (shake_slow && init_n > 0 && SK.on && SK.view == P.view) {
     /* the rest place is the median of the first 12 samples after a cut, not the one sample the cut met (which can be one of the camera's outliers: the black box had a lane change at
      * 323 km/h swing the roof camera 4 to 6 m back for 0.4 s, and every rule that took such a swing for a cut left the eye there for seconds); the view follows the camera till then */
+    /* (and the camera has to have stopped moving first: a cut to the first-person view after a rival's introduction, or at a restart, has the arcade's camera gliding from where it was
+     * to its place over a second or more, and a rest place made of the first 12 steps of that glide held the view tilted and off the road for seconds, the 10-in-a-row's next rival
+     * on the Thor. Samples that are still moving, in a restart's or an introduction's countdown, start the 12 over, 10 s at most (where the log showed the glide from the introduction last 5 s and the lock taken in its middle, 80 units behind the car): the view follows the camera
+     * itself meanwhile, as the arcade has it.) */
+    if (init_n >= 1 && init_wait < 600 && (c->race.countdown > 0.0f || M32(STATE) != 2)) { /* (a restart's or an introduction's glide takes 5 s or so and ends slowly: a tenth of a unit a step is still a move. In a race at speed the camera's own noise is as large as its moves, so a cut there takes its 12 samples as they come) */
+      const float *po = init_off[init_n - 1], *pz = init_ax[init_n - 1][2], *px = init_ax[init_n - 1][0];
+      float dd = 0;
+      for (int k = 0; k < 3; ++k) dd += (off[k] - po[k]) * (off[k] - po[k]);
+      const float fz = ax[2][0] * pz[0] + ax[2][1] * pz[1] + ax[2][2] * pz[2], fx = ax[0][0] * px[0] + ax[0][1] * px[1] + ax[0][2] * px[2]; /* (the view's direction and its roll) */
+      if (dd > 0.01f || fz < 0.99998f || fx < 0.99998f) {
+        ++init_wait;
+        init_n = 1;
+        memcpy(init_off[0], off, sizeof off), memcpy(init_ax[0], ax, sizeof ax);
+        return;
+      }
+    }
     memcpy(init_off[init_n], off, sizeof off), memcpy(init_ax[init_n], ax, sizeof ax);
     if (++init_n >= 12) {
       float t[12];
@@ -1149,6 +1174,7 @@ static void shake_filter(car_state *c) {
       }
       init_n = 0;
       slow_warm = 0;
+      init_wait = 0;
     }
     return;
   }
@@ -1156,7 +1182,7 @@ static void shake_filter(car_state *c) {
     SK.on = 1, SK.view = P.view, slow_rej = slow_warm = far_n = 0;
     memcpy(SK.off, off, sizeof off), memcpy(SK.ax, ax, sizeof ax);
     if (shake_slow) {
-      init_n = 1;
+      init_n = 1, init_wait = 0;
       memcpy(init_off[0], off, sizeof off), memcpy(init_ax[0], ax, sizeof ax);
     }
     return;
