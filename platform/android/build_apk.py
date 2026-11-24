@@ -18,6 +18,7 @@ import io
 import os
 import re
 import shutil
+import time
 import subprocess
 import sys
 import zipfile
@@ -197,7 +198,16 @@ def build(sdk, jdk, out_apk, pkg=None, label=None, embed=None, vulkan=True, keys
     if bt is None:  # (no zipalign in Termux: apksigner 35 and later page-aligns the libraries itself when it signs)
         shutil.copyfile(base, aligned)
     else:
-        run([tool(bt, "zipalign"), "-f", "-P", "16", "4", base, aligned], env=env)
+        # (a scanner or a slow drive can hold the file for a moment: "Unable to open base.apk as zip archive: No error", issue 44; tried again, and then the way Termux does it)
+        for attempt in range(3):
+            if subprocess.run([tool(bt, "zipalign"), "-f", "-P", "16", "4", base, aligned], cwd=ROOT, env=env).returncode == 0:
+                break
+            if attempt < 2:
+                say("zipalign could not open the file, trying again in a few seconds...")
+                time.sleep(4 * (attempt + 1))
+        else:
+            say("zipalign did not work: apksigner page-aligns the libraries itself when it signs (build-tools 35)")
+            shutil.copyfile(base, aligned)
     keystore = keystore or os.path.join(work, "debug.keystore")
     if not os.path.isfile(keystore):
         os.makedirs(os.path.dirname(keystore), exist_ok=True)
