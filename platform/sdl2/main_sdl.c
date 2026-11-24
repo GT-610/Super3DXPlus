@@ -1119,7 +1119,11 @@ static int restart_on_angle(void) {
 
 int main(int argc, char **argv) {
   int w = LAYOUT_W, h = LAYOUT_H, fullscreen = 0, sized = 0;
+#ifdef WMMT_MACOS
+  int use_loader_thread = getenv("MT3DX_LOADER_THREAD") ? atoi(getenv("MT3DX_LOADER_THREAD")) != 0 : 1; /* (on by default here: the menu frames' spare time hitched the races on an M2; MT3DX_LOADER_THREAD=0 turns it off) */
+#else
   int use_loader_thread = getenv("MT3DX_LOADER_THREAD") != NULL;
+#endif
   const char *data = NULL, *save = NULL;
   for (int i = 1; i < argc; ++i) {
     if (!strcmp(argv[i], "--loader-thread")) use_loader_thread = 1;
@@ -1451,6 +1455,8 @@ int main(int argc, char **argv) {
     case SDL_JOYBUTTONUP:
     case SDL_JOYHATMOTION: wheel_event(&e); break;
     case SDL_WINDOWEVENT:
+      /* the close button of the game window (SDL only sends SDL_QUIT when the last window closes, and the loading thread's hidden window is one more) */
+      if (e.window.event == SDL_WINDOWEVENT_CLOSE && e.window.windowID == SDL_GetWindowID(P.win)) P.quit = 1;
       if (e.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
         SDL_GetWindowSize(P.win, &P.win_w, &P.win_h);
         /* a window narrower than 4:3 is made 4:3 (the layout has nothing to show above it) */

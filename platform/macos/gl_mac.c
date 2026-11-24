@@ -130,6 +130,7 @@ static void *mac_lookup(const char *name) {
  * (glDiscardFramebufferEXT and friends: no-ops are all the game needs of them) */
 void *wmmt_mac_gl_lookup(const char *name) {
   void *p = mac_lookup(name);
+  if (!p) fprintf(stderr, "GL: no %s on this driver (a no-op stands in)\n", name);
   return p ? p : (void *)wmmt_mac_gl_stub;
 }
 
