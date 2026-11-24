@@ -2,7 +2,7 @@
 
 This is an accessibility-focused native port of *Wangan Midnight Maximum Tune 3DX+* with extensive controller support, native wheel support, and a new console-style frontend. It is based on the static recompilation work of [Re3DX+](https://github.com/Allannn-sudo). The player was rebuilt on SDL2 alongside the original Android player. It supports both the Japan and Export (English) versions of the game, and runs on:
 
-- PC (Windows / Linux)
+- PC (Windows / Linux / macOS)
 - Android
 - Raspberry Pi
 
@@ -43,7 +43,7 @@ These should have a folder with a file called `main` and a folder called `data` 
 
 **Linux / macOS**
 
-Download the code, open a terminal in its folder and run `./setup.sh`. It installs the Python packages by itself, and tells you the one `apt install` command to run if a compiler or SDL2 is missing.
+Download the code, open a terminal in its folder and run `./setup.sh`. It installs the Python packages by itself, and tells you the one `apt install` command to run if a compiler or SDL2 is missing (on macOS: `brew install sdl2 ffmpeg`).
 
 **Raspberry Pi and Android** (after the setup above)
 
@@ -73,7 +73,7 @@ It is substantially harder than building it on a PC, but it is possible.
 ```
 build.py        build driver (Windows, Linux, macOS)
 src/            the game (platform-neutral C)
-platform/       per-target code: sdl2/ (PC, Pi), android/, pi/
+platform/       per-target code: sdl2/ (PC, Pi), macos/ (GLES2 over desktop OpenGL), android/, pi/
 tools/          data pipeline (Python): converters, generators, packers, per-build address tables
 test/           desktop tests in C
 third_party/    stb, zlib, Khronos GLES2 headers (each with its own notice)
@@ -132,7 +132,6 @@ Only tested on a Raspberry Pi 5 (8 GB). Other models should work with simple con
 
 **Not implemented:**
 - Ghost VS. Battle / Crowns (lack of interest - Re3DX+ is strictly native, doesn't use a server to sync crowns, so it would be quite boring.)
-- MacOS support (OpenGL ES has iffy support. Could be possible.)
 
 **Known bugs:**
 - Menu slider animations are buggy in some cases.

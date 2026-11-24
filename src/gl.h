@@ -1,10 +1,11 @@
 /* GLES2 include shim: the real headers on iOS, Mesa's for the desktop screenshots
  * (test/menushot.c, -DWMMT_EGL), vkgl's calls on Vulkan (Android's, -DWMMT_VK: vkgl.h), a
- * declaration-only stub for syntax checks (test/glstub.h). */
+ * declaration-only stub for syntax checks (test/glstub.h). On macOS the same GLES2
+ * declarations are used over a desktop OpenGL 2.1 context (platform/macos/gl_mac.c). */
 #ifndef WMMT_GL_H
 #define WMMT_GL_H
 
-#ifdef __APPLE__
+#if defined(__APPLE__) && !defined(WMMT_MACOS)
 #include <OpenGLES/ES2/gl.h>
 #include <OpenGLES/ES2/glext.h>
 #elif defined(WMMT_VK)

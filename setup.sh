@@ -6,4 +6,5 @@ if command -v python3 >/dev/null 2>&1; then
   exec python3 build.py "$@"
 fi
 echo "Python 3 is not installed. On Ubuntu/Debian/Raspberry Pi OS: sudo apt install python3 python3-pip python3-venv"
+echo "On macOS: brew install python (and xcode-select --install for the compiler)"
 exit 1

@@ -19,8 +19,10 @@ from sysdeps import find_font  # noqa: E402
 
 
 def default_font():
-    """Nimbus Sans Narrow Bold (urw-base35), or a bold sans the system has (Arial Narrow Bold, Arial Bold, DejaVu Sans Bold)"""
-    return find_font("NimbusSansNarrow-Bold.otf", "ARIALNB.TTF", "arialbd.ttf", "DejaVuSans-Bold.ttf", "LiberationSansNarrow-Bold.ttf")
+    """Nimbus Sans Narrow Bold (urw-base35), or a bold sans the system has (Arial Narrow Bold, Arial Bold, DejaVu Sans Bold);
+    the names with spaces are macOS' own (Supplemental/Arial Narrow Bold.ttf)"""
+    return find_font("NimbusSansNarrow-Bold.otf", "ARIALNB.TTF", "arialbd.ttf", "Arial Narrow Bold.ttf", "Arial Bold.ttf",
+                     "DejaVuSans-Bold.ttf", "LiberationSansNarrow-Bold.ttf")
 
 
 FONT = None

@@ -311,7 +311,7 @@ def qmark():
     from PIL import ImageFont, ImageChops, ImageFilter
     s = 4
     from sysdeps import find_font
-    font = ImageFont.truetype(find_font("DejaVuSans-Bold.ttf", "arialbd.ttf", "LiberationSans-Bold.ttf"), 100 * s)
+    font = ImageFont.truetype(find_font("DejaVuSans-Bold.ttf", "arialbd.ttf", "Arial Bold.ttf", "LiberationSans-Bold.ttf"), 100 * s)
     mask = Image.new("L", (128 * s, 128 * s), 0)
     d = ImageDraw.Draw(mask)
     bb = d.textbbox((0, 0), "?", font=font)

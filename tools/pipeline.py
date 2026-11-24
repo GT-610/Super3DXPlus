@@ -10,7 +10,8 @@
 before `convert`, and both before the player is built (`python build.py exe`). Every conversion step has a time limit and a
 log (build/logs/<step>.log); the first failed step stops the run and says which (--keep-going carries on and lists them all),
 so a half-converted data set cannot pass for a finished one. Needs the Python packages of tools/requirements.txt, and for
-`convert` an ffmpeg with the Bink decoder and libx264/libvorbis (found on PATH, or named by FFMPEG).
+`convert` an ffmpeg with the Bink decoder and libx264 (and a Vorbis encoder: libvorbis, or ffmpeg's own in 9.0 and later,
+which dropped the external library; tools/pipeline.py picks whichever the ffmpeg has) (found on PATH, or named by FFMPEG).
 """
 import argparse
 import os
@@ -32,6 +33,22 @@ def sh(*cmd, env=None, cwd=ROOT, stdout=None, check=True):
         what = "the program " + str(cmd[0]) if not os.path.isfile(str(cmd[0])) and not shutil.which(str(cmd[0])) else "the folder " + str(cwd) if not os.path.isdir(str(cwd)) else str(e)
         sys.exit("could not start a program: %s was not found (%s)."
                  "\nIf it is ffmpeg, install it (Windows: winget install Gyan.FFmpeg) or set FFMPEG to its full path, then run setup again." % (what, e))
+
+
+_vorbis = None
+
+
+def vorbis_args(ff):
+    """the Vorbis encoder this ffmpeg has: libvorbis where it was built with the library, else ffmpeg's own
+    (9.0 dropped the external library; its encoder is experimental, hence -strict -2), with the same quality"""
+    global _vorbis
+    if _vorbis is None:
+        try:
+            encoders = subprocess.run([ff, "-hide_banner", "-encoders"], capture_output=True, text=True).stdout
+        except OSError:
+            encoders = ""
+        _vorbis = (["-c:a", "libvorbis"] if "libvorbis" in encoders else ["-c:a", "vorbis", "-strict", "-2"]) + ["-q:a", "4"]
+    return _vorbis
 
 
 # ---------------------------------------------------------------------------------------------- the dump's view
@@ -403,7 +420,7 @@ def prepare_bgm(ctx, formats=("m4a", "ogg")):
             if os.path.isfile(dst):
                 continue
             wav = os.path.join(src, f + ".wav")
-            codec = ["-c:a", "aac", "-b:a", "128k", "-f", "ipod"] if fmt == "m4a" else ["-c:a", "libvorbis", "-q:a", "4", "-ar", "44100", "-ac", "2", "-f", "ogg"]
+            codec = ["-c:a", "aac", "-b:a", "128k", "-f", "ipod"] if fmt == "m4a" else vorbis_args(ff) + ["-ar", "44100", "-ac", "2", "-f", "ogg"]
             sh(ff, "-y", "-v", "error", "-i", wav, *codec, dst + ".part")
             os.replace(dst + ".part", dst)
 
@@ -441,7 +458,7 @@ def prepare_movies(ctx, mp4=True, wmv=True):
                 frames = os.path.join(tmp, "f")
                 os.makedirs(frames)
                 ogg = os.path.join(tmp, "a.ogg")
-                sh(ff, "-y", "-v", "error", "-i", wav_p, "-ar", "44100", "-ac", "2", "-c:a", "libvorbis", "-q:a", "4", ogg)
+                sh(ff, "-y", "-v", "error", "-i", wav_p, "-ar", "44100", "-ac", "2", *vorbis_args(ff), ogg)
                 if label:
                     sh(ff, "-y", "-v", "error", "-i", bik_p, "-loop", "1", "-framerate", "30", "-i", os.path.join(d, "sprite", label), "-filter_complex",
                        _movie_label_filter(False).replace("[2:v]", "[1:v]"), "-map", "[v]", "-q:v", quality, "-pix_fmt", "yuvj420p", os.path.join(frames, "%05d.jpg"))

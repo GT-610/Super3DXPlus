@@ -138,6 +138,8 @@ What Super3DX+ adds or changes compared with [Re3DX+](NOTICE.md). Longer explana
 - Export (English) build support and an English language layer
 - Raspberry Pi 5 support with composite CRT output (and optional HDMI)
 - Windows, Linux and updated Android players
+- macOS support: the same GLES2 sources run on a desktop OpenGL 2.1 context (`platform/macos/gl_mac.c` maps the EXT/APPLE entry points for framebuffers, mipmaps, blits, multisampling and vertex arrays, and translates the shaders' precision qualifiers to GLSL 1.20); `build.py --target macos` (the default on macOS), and `play.command` and a `Super3DX+.app` in the package
+- macOS setup and data tools: the converters accept the Arial fonts macOS ships, and ffmpeg 9's own Vorbis encoder where it no longer includes libvorbis
 - Windowed / fullscreen mode (F11 or Alt+Enter), remembered between starts
 - `build.py` and `tools/pipeline.py` build driver: Python 3.9+ and a C compiler, no WSL
 - Guided setup (`setup.bat` / `setup.sh`): installs what it needs, finds and checks your game folder, builds, and explains failures in plain language

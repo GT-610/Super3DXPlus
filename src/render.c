@@ -2145,7 +2145,7 @@ void render_blur_size(int *w, int *h) {
 }
 
 void render_blur_end(void) {
-#ifdef __APPLE__
+#if defined(__APPLE__) && !defined(WMMT_MACOS)
   const GLenum discard[] = { GL_DEPTH_ATTACHMENT, GL_STENCIL_ATTACHMENT };
   glDiscardFramebufferEXT(GL_FRAMEBUFFER, 2, discard);
 #endif
@@ -2822,7 +2822,7 @@ int render_backmirror_begin(int w, int h, const float clear[3]) {
 }
 
 void render_backmirror_end(void) {
-#ifdef __APPLE__
+#if defined(__APPLE__) && !defined(WMMT_MACOS)
   const GLenum discard[] = { GL_DEPTH_ATTACHMENT };
   glDiscardFramebufferEXT(GL_FRAMEBUFFER, 1, discard);
 #endif

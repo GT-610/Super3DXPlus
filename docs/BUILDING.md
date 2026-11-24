@@ -48,6 +48,15 @@ On Linux: `sudo apt install build-essential libsdl2-dev libegl1-mesa-dev libgles
 `pip install -r tools/requirements.txt` (use a virtual environment if pip refuses: `python3 -m venv .venv && . .venv/bin/activate`), then
 `python3 build.py all /path/to/your/game/folder`; run `build/linux/package/play.sh`.
 
+On macOS: `xcode-select --install` (the C compiler), `brew install sdl2 ffmpeg`, then
+`pip3 install -r tools/requirements.txt` (or let the setup make `.super3dx/venv`), then
+`python3 build.py all /path/to/your/game/folder`; run `build/macos/package/play.command`, or
+double-click `Super3DX+.app` in that folder. macOS has no OpenGL ES: the player asks SDL for
+a desktop OpenGL 2.1 context and `platform/macos/gl_mac.c` runs the GLES2 renderer on it
+(the EXT/APPLE entry points for framebuffers, mipmaps, blits and vertex arrays, and the
+shaders' precision qualifiers translated to GLSL 1.20). Apple has deprecated OpenGL but
+still ships it, so this works without any extra libraries.
+
 ## If something goes wrong
 
 - The setup's log is `build/logs/setup-<date>.txt`; each conversion step also has its own `build/logs/<step>.log`. Open an issue and attach the newest.
@@ -75,8 +84,8 @@ physics recompiled from `main`; `src/phys/phys_rc.c` is about 18 MB). Both stay 
 |---|---|---|
 | Python 3.9+ and the packages | python.org, then `pip install -r tools/requirements.txt` | the same (`python3`) |
 | a C compiler | **Zig** (`python build.py setup-zig`, no installer) or MinGW-w64 (MSYS2: `pacman -S mingw-w64-x86_64-gcc`) | gcc or clang (`apt install build-essential`) |
-| SDL2 development files | `python build.py setup-sdl2` (the mingw package, from libsdl.org's release) | `apt install libsdl2-dev libegl1-mesa-dev libgles2-mesa-dev` |
-| ffmpeg with the Bink decoder (sound, movies) | a full build: `winget install Gyan.FFmpeg`, or set `FFMPEG` | `apt install ffmpeg` |
+| SDL2 development files | `python build.py setup-sdl2` (the mingw package, from libsdl.org's release) | `apt install libsdl2-dev libegl1-mesa-dev libgles2-mesa-dev` (macOS: `brew install sdl2`) |
+| ffmpeg with the Bink decoder (sound, movies) | a full build: `winget install Gyan.FFmpeg`, or set `FFMPEG` | `apt install ffmpeg` (macOS: `brew install ffmpeg`) |
 | a C++ demangler | built automatically with Zig (`tools/demangle.cpp`); nothing to install | `c++filt` (binutils; or any C++ compiler builds the helper) |
 | fonts for a few menu pictures | Arial (already there); the converter looks in `C:\Windows\Fonts` | Nimbus Sans / DejaVu (`apt install fonts-urw-base35 fonts-dejavu fonts-noto-cjk`) |
 
