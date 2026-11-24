@@ -978,6 +978,21 @@ static int options_peek(int k, int def) {
   return n > k ? v[k] : def;
 }
 
+/* the macOS player's BACKGROUND LOADING (the loading thread), read before the game starts: dir/option's "loader" line, on if there is none */
+int app_loader_pref(const char *dir) {
+  char path[1100], line[512];
+  int on = 1;
+  snprintf(path, sizeof path, "%s/option", dir);
+  FILE *f = fopen(path, "r");
+  if (!f) return 1;
+  while (fgets(line, sizeof line, f)) {
+    int v;
+    if (sscanf(line, "loader %d", &v) == 1) on = v != 0;
+  }
+  fclose(f);
+  return on;
+}
+
 /* save_dir/option's "gfx2" line (ANTI-ALIASING 0 off, 1 2X, 2 4X; the RESOLUTION SCALE step), or the defaults of a file without it: 2X, full size (the 4X of the older option line counts) */
 static void options_peek_gfx2(int *aa, int *rs) {
   char path[1100], line[512];
@@ -1096,8 +1111,10 @@ static int options_load(void) {
   if (n >= 3 && fscanf(f, " smooth %d", &sm) == 1) G.menu.smooth_on = sm != 0;
   int ta = 10; /* (the touch controls' BUTTON OPACITY, after it: solid unless the file says less) */
   if (n >= 3 && fscanf(f, " touchalpha %d", &ta) == 1) G.menu.key_alpha = ta < 1 ? 1 : ta > 10 ? 10 : ta;
+  int ld = 1; /* (BACKGROUND LOADING, the macOS player's: on unless the file says off; read after gfx2 below) */
   int g2[2] = { -1, 6 }; /* (ANTI-ALIASING's three steps and the RESOLUTION SCALE's, after it: a file from before has the 2X / 4X the option line says, and the full size) */
   int have_g2 = n >= 3 && fscanf(f, " gfx2 %d %d", &g2[0], &g2[1]) == 2;
+  if (n >= 3 && fscanf(f, " loader %d", &ld) == 1) G.menu.loader_on = ld != 0;
   fclose(f);
   if (n < 3) return 0;
   G.menu.aa_mode = have_g2 && g2[0] >= 0 && g2[0] <= 2 ? g2[0] : hq[5] ? 2 : 1;
@@ -1139,7 +1156,7 @@ static void options_save(void) {
   for (int g = 3; g < HUD_KEY_GROUPS; ++g) /* (the shift keys' own, after them) */
     now[72 + (g - 3) * 3] = G.menu.key_k[g], now[73 + (g - 3) * 3] = G.menu.key_dx[g], now[74 + (g - 3) * 3] = G.menu.key_dy[g];
   now[78] = G.menu.lock60, now[79] = G.menu.smooth_on, now[80] = G.menu.key_alpha;
-  now[81] = G.menu.aa_mode, now[82] = G.menu.rscale;
+  now[81] = G.menu.aa_mode, now[82] = G.menu.rscale, now[83] = G.menu.loader_on;
   now[12] = G.menu.aa_mode == 2; /* (the option line's 4X, as it was) */
   if (G.options_global && !memcmp(now, last, sizeof now)) return;
   char path[1100];
@@ -1177,6 +1194,7 @@ static void options_save(void) {
   fprintf(f, "smooth %d\n", now[79]);
   fprintf(f, "touchalpha %d\n", now[80]);
   fprintf(f, "gfx2 %d %d\n", now[81], now[82]);
+  fprintf(f, "loader %d\n", now[83]);
   fclose(f);
   memcpy(last, now, sizeof last);
   G.options_global = 1;
@@ -1866,6 +1884,7 @@ void app_set_fullscreen(int on) {
 }
 void app_toggle_fullscreen(void) { app_set_fullscreen(!G.menu.fullscreen); }
 void app_window_row(int on) { G.menu.win_row = on != 0; }
+void app_loader_row(int on) { G.menu.loader_row = on != 0; }
 void app_firewall_row(int on) { G.menu.fw_row = on != 0; }
 void app_frame_lock_row(int on) { G.menu.fps_row = on != 0; }
 int app_frame_lock(void) { return G.menu.fps_row && G.menu.lock60; }

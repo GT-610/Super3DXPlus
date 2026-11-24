@@ -221,6 +221,7 @@ typedef struct {
    * occlusion, the wet road, the paint's reflection and the anti-aliasing (4x 1, 2x 0, from
    * the next start) */
   int ctl_touch; /* the last input was a touch (menu_touch) and not a pad or key (menu_action): the CONTROLS screen shows the touch controls */
+  int loader_row, loader_on; /* the macOS player's BACKGROUND LOADING row (loader_row, app_loader_row) and the switch (saved; read by main_sdl.c at the start) */
   int aa_mode, rscale; /* (ANTI-ALIASING 0 off, 1 2X, 2 4X; RESOLUTION SCALE's step 0..6, MENU_RSCALE) */
   int hq_rows, hd_tex, bloom_on, ssao_on, wet_on, paint_on, aa4, milage_on; /* (paint_on: the paint's clear coat, now the REFLECTION row's, over_on) */
   /* and on an iPad (res_row, set by the app), the screen's resolution: 1024x768 (0) or the

@@ -2312,6 +2312,7 @@ static int graphics_rows(menu_state *m, orow r[16]) {
     r[n++] = (orow){ "RESOLUTION SCALE", "HOW SHARP THE 3D IS DRAWN. LOWER IS FASTER ON A SLOW GPU", OK_STEP, &m->rscale, 6, RSCALE_NAME };
   }
   if (m->res_row) r[n++] = (orow){ "RESOLUTION", "TAKES EFFECT AT THE NEXT START", OK_RES, &m->hires };
+  if (m->loader_row) r[n++] = (orow){ "BACKGROUND LOADING", "LOADS CARS AND TRACKS WHILE YOU BROWSE: SMOOTHER RACES, A SLOWER FIRST LOAD. TAKES EFFECT AT THE NEXT START", OK_SWITCH, &m->loader_on };
   if (m->win_row) r[n++] = (orow){ "WINDOW MODE", "WINDOWED OR FULLSCREEN (F11 OR ALT+ENTER ANYTIME)", OK_WIN, &m->fullscreen };
   r[n++] = (orow){ "SMOOTH MOTION", "EVEN MOTION ON 90/120/144 HZ SCREENS AND IN VERSUS. ADDS ONE FRAME OF DELAY", OK_SWITCH, &m->smooth_on };
   if (m->fps_row) r[n++] = (orow){ "60 FPS LOCK", "ASKS FOR A 60 HZ SCREEN. HELPS ON 90/120 HZ PHONES THAT DROP TO 45 (ANDROID 11+)", OK_SWITCH, &m->lock60 };
@@ -7622,7 +7623,7 @@ void menu_init(menu_state *m) {
   m->rum[0] = 8, m->rum[1] = 10, m->rum[2] = 10, m->rum[3] = 5, m->cam_shake = 10, m->smooth_on = 1, m->key_alpha = 10;
   m->mip = 2;
   /* (the SSAO off: its 20 ms on the Mi 6 cost the 60 fps) */
-  m->hd_tex = 1, m->bloom_on = 0, m->ssao_on = 0, m->wet_on = 0, m->paint_on = 1, m->aa4 = 0, m->aa_mode = 1, m->rscale = 6;
+  m->hd_tex = 1, m->bloom_on = 0, m->ssao_on = 0, m->wet_on = 0, m->paint_on = 1, m->aa4 = 0, m->aa_mode = 1, m->rscale = 6, m->loader_on = 1;
   m->garage_changed = 0;
   m->game = MENU_GAME_TA;
   m->story_sel = -1;

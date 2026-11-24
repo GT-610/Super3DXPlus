@@ -662,6 +662,9 @@ static int game(void *arg) {
   }
   if (P.fs_cli) app_set_fullscreen(1); /* (the command line over the saved mode) */
 #if !defined(__aarch64__) && !defined(__arm__)
+#ifdef WMMT_MACOS
+  app_loader_row(1);
+#endif
   if (!CRT.on) app_window_row(1); /* the game options get a WINDOW MODE row (the Pi's kiosk has no windows) */
 #ifdef _WIN32
   app_firewall_row(1); /* (the versus lobby's ALLOW THROUGH FIREWALL) */
@@ -1119,6 +1122,7 @@ static int restart_on_angle(void) {
 
 int main(int argc, char **argv) {
   int w = LAYOUT_W, h = LAYOUT_H, fullscreen = 0, sized = 0;
+  int use_loader_thread_cli = 0;
 #ifdef WMMT_MACOS
   int use_loader_thread = getenv("MT3DX_LOADER_THREAD") ? atoi(getenv("MT3DX_LOADER_THREAD")) != 0 : 1; /* (on by default here: the menu frames' spare time hitched the races on an M2; MT3DX_LOADER_THREAD=0 turns it off) */
 #else
@@ -1126,7 +1130,7 @@ int main(int argc, char **argv) {
 #endif
   const char *data = NULL, *save = NULL;
   for (int i = 1; i < argc; ++i) {
-    if (!strcmp(argv[i], "--loader-thread")) use_loader_thread = 1;
+    if (!strcmp(argv[i], "--loader-thread")) use_loader_thread = use_loader_thread_cli = 1;
     else if (!strcmp(argv[i], "--save") && i + 1 < argc) save = argv[++i];
     else if (!strcmp(argv[i], "--size") && i + 1 < argc) sscanf(argv[++i], "%dx%d", &w, &h), sized = 1;
     else if (!strcmp(argv[i], "--fullscreen")) fullscreen = 1;
@@ -1349,6 +1353,9 @@ int main(int argc, char **argv) {
    * of its own. Off by default: with Mesa's Direct3D 12 driver on WSLg the game thread's swap and the loader's texture
    * upload deadlock (the game waits for a GPU fence, the loader for a driver lock), freezing the whole player at the first
    * Start press. Without it the game loads in the menu frames' spare time, as it is made to. */
+#ifdef WMMT_MACOS
+  if (!getenv("MT3DX_LOADER_THREAD") && !use_loader_thread_cli) use_loader_thread = app_loader_pref(P.save_dir); /* (the options' BACKGROUND LOADING, unless the environment or the command line says) */
+#endif
   if (use_loader_thread) {
     SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
     P.load_win = SDL_CreateWindow("loader", 0, 0, 16, 16, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);

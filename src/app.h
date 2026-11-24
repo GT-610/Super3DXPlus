@@ -48,6 +48,9 @@ int app_fullscreen(void);
 void app_set_fullscreen(int on);
 void app_toggle_fullscreen(void);
 void app_window_row(int on);
+/* the macOS player's BACKGROUND LOADING: app_loader_row(1) gives the graphics options its row; app_loader_pref reads the saved choice (1 on) from a save folder, before the game starts */
+void app_loader_row(int on);
+int app_loader_pref(const char *dir);
 /* the Windows player's network options rows (ALLOW THROUGH FIREWALL, OPEN LOG FOLDER): app_firewall_row(1) gives the screen them */
 void app_firewall_row(int on);
 /* 1 while the race on screen is drawn with smooth motion (the picture blended between the physics' steps: a display that is not 60 Hz, a versus): the
