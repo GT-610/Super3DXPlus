@@ -25,6 +25,10 @@ Set as environment variables (they do nothing unset, and silence the sound unles
 | `MT3DX_OWNSEL=<n>` | the card in hand is this garage car when a race starts with none (the mileage counts for it) |
 | `MT3DX_VSPAUSE=<n>` | a versus race is paused at its frame n and left after 10 s (the pilot drives the car meanwhile: the log's `versus: paused, the pilot drives...` and `the pause is left` lines) |
 | `MT3DX_BBTEST=<n>` | the black box (`bb` lines in the log: it records itself when the car turns over 200 degrees a second or the eye jumps 0.3 m) fires at the race's n-th step, to see its lines |
+| `MT3DX_RANK_TEST=<ms>` | a run of this time on course 0 is added as the player's own through the code a finished run takes (docs/RECORDS.md): it shows in the ranking and in `records/my-times.rec` |
+| `MT3DX_CARD_TEST=<ms>` | the open save's course 0 best is read (and logged), then set to this time and kept in `records/card<n>.dat`: a second start reads it back |
+| `MT3DX_LOADER_THREAD=0\|1` | (the macOS player has it on by default; the others off) the loading thread: loads the cars and tracks in the background while you browse (fewer hitches in races, a slower first load). The macOS DEBUG OPTIONS has a BACKGROUND LOADING row; this and `--loader-thread` win over it |
+| `MT3DX_WARPTEST=<n>` | the car is put back at its first point at the race's frame n, at its speed, as a cutscene's restart does: the gear must stay (issue 41) |
 | `MT3DX_TITLE=<id>` | the race plate shows this title (1781 is the Japan build's 連荘キング: its キ and グ were the ones to draw wrong) |
 | `MT3DX_INTERP_LOG=n` | log n frames of a race from its 120th: the frame's length, the time it moved the picture by, the steps run, the blend, the drawn car's and camera's place and the eye-to-car distance |
 | `MT3DX_FRAMELOG=n` | (PC player) every race frame's length and where it went (the app's frame, the swap, the hold), n frames from the 600th; `MT3DX_HITCH=<ms>` logs each frame that took longer |
