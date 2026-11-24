@@ -402,6 +402,12 @@ def package(target):
     if not os.path.isdir(data):
         die("no data/: python build.py data <arcade root>")
     pk = os.path.join(out, "package")
+    kept = None  # (the package is made anew each time, but the saves in its save folder are the player's: set aside, and put back at the end)
+    if os.path.isdir(os.path.join(pk, "save")):
+        import tempfile
+        kept = tempfile.mkdtemp(prefix="save-kept-", dir=out)
+        shutil.move(os.path.join(pk, "save"), os.path.join(kept, "save"))
+        say("the saves in", os.path.join(pk, "save"), "are kept")
     shutil.rmtree(pk, ignore_errors=True)
     os.makedirs(pk)
     shutil.copy(exe, pk)
@@ -446,6 +452,9 @@ def package(target):
         "For personal use: the data is the arcade's, do not share it.\n" +
         ("macOS: double-click Super3DX+.app (or run play.command in a terminal). It needs Homebrew's SDL2 (brew install sdl2): "
          "the player links it from /opt/homebrew.\n" if target == "macos" else ""))
+    if kept:
+        shutil.move(os.path.join(kept, "save"), os.path.join(pk, "save"))
+        os.rmdir(kept)
     say("package:", pk, "(zip this folder to move it)")
 
 
