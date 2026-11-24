@@ -689,48 +689,213 @@ static int track_open(int city, int zone) {
  * which a run places behind when it is slower. ---- */
 #define RANKING_TOP_MS 599999
 
-/* save_dir/records<n> (save n's): a line with the player's best on each course (ms, 0 = none), then a line
- * "car <course> <pack> <ms>" for each car type's best on a course */
+/* ---- The records files (the player's bests of a save, the machine ranking's runs) are kept in save_dir/records/, not as lines of text a text editor can change: each is packed
+ * (zlib), then run through a stream that depends on a number of its own, with its length and a check of its contents in front. A file that has been changed, by hand or by a
+ * bad copy, does not unpack, and is left out whole. This is to keep a time from being typed in, not a lock: the code is open, and a determined hand can make a file the same
+ * way. The first start of this build reads the plain files of the builds before (save_dir/records<n> and save_dir/ranking) once and keeps them where they are, unused. ---- */
+#define REC_KEY 0x5c3a91d7e2b84f16ULL
+#define REC_MAX_BYTES (2L << 20)
+#define REC_MAX_TEXT (4L << 20)
+static const unsigned char MAGIC_RANK[4] = { 'S', 'R', 'K', 1 }; /* the machine ranking's runs: the own file and the ones that are shared */
+static const unsigned char MAGIC_CARD[4] = { 'S', 'P', 'B', 1 }; /* a save's bests: its own, never merged */
+
+static uint64_t rec_next(uint64_t *s) {
+  *s ^= *s >> 12, *s ^= *s << 25, *s ^= *s >> 27;
+  return *s * 0x2545F4914F6CDD1DULL;
+}
+
+static void rec_stream(uint32_t salt, unsigned char *p, size_t n) {
+  uint64_t s = REC_KEY ^ (((uint64_t)salt << 29) | salt);
+  uint64_t w = 0;
+  if (!s) s = 1;
+  for (size_t i = 0; i < n; ++i) {
+    if ((i & 7) == 0) w = rec_next(&s);
+    p[i] ^= (unsigned char)(w >> ((i & 7) * 8));
+  }
+}
+
+static uint64_t rec_hash(const unsigned char *p, size_t n) {
+  uint64_t h = 0xcbf29ce484222325ULL ^ REC_KEY;
+  for (size_t i = 0; i < n; ++i) h = (h ^ p[i]) * 0x100000001b3ULL;
+  return h;
+}
+
+/* text -> the file's bytes (the caller frees), NULL if it could not be made */
+static unsigned char *rec_pack(const unsigned char magic[4], const char *text, size_t n, size_t *olen) {
+  uLongf cl = compressBound((uLong)n);
+  unsigned char *c = malloc(cl + 1), *out = NULL;
+  if (!c) return NULL;
+  if (compress2(c, &cl, (const Bytef *)text, (uLong)n, 9) != Z_OK) {
+    free(c);
+    return NULL;
+  }
+  size_t body = 12 + cl;
+  out = malloc(4 + 4 + body);
+  if (out) {
+    static uint32_t bump;
+    uint32_t salt = (uint32_t)time(NULL) * 2654435761u + (uint32_t)(uintptr_t)out + 40503u * ++bump;
+    uint64_t chk = rec_hash((const unsigned char *)text, n);
+    memcpy(out, magic, 4);
+    for (int i = 0; i < 4; ++i) out[4 + i] = (unsigned char)(salt >> (8 * i));
+    for (int i = 0; i < 4; ++i) out[8 + i] = (unsigned char)((uint32_t)n >> (8 * i));
+    for (int i = 0; i < 8; ++i) out[12 + i] = (unsigned char)(chk >> (8 * i));
+    memcpy(out + 20, c, cl);
+    rec_stream(salt, out + 8, body);
+    *olen = 8 + body;
+  }
+  free(c);
+  return out;
+}
+
+/* a file's bytes -> its text (NUL-ended; the caller frees), NULL if it is not one or has been changed */
+static char *rec_unpack(const unsigned char magic[4], const unsigned char *buf, size_t n, size_t *tlen) {
+  if (n < 20 || memcmp(buf, magic, 4)) return NULL;
+  uint32_t salt = 0;
+  for (int i = 0; i < 4; ++i) salt |= (uint32_t)buf[4 + i] << (8 * i);
+  unsigned char *body = malloc(n - 8);
+  if (!body) return NULL;
+  memcpy(body, buf + 8, n - 8);
+  rec_stream(salt, body, n - 8);
+  uint32_t len = 0;
+  uint64_t chk = 0;
+  for (int i = 0; i < 4; ++i) len |= (uint32_t)body[i] << (8 * i);
+  for (int i = 0; i < 8; ++i) chk |= (uint64_t)body[4 + i] << (8 * i);
+  char *text = NULL;
+  if (len <= REC_MAX_TEXT && (text = malloc((size_t)len + 1)) != NULL) {
+    uLongf dl = len;
+    if (uncompress((Bytef *)text, &dl, body + 12, (uLong)(n - 20)) != Z_OK || dl != len || rec_hash((const unsigned char *)text, len) != chk) {
+      free(text);
+      text = NULL;
+    } else {
+      text[len] = 0;
+      if (tlen) *tlen = len;
+    }
+  }
+  free(body);
+  return text;
+}
+
+/* a whole file (not past max bytes), the caller frees; NULL if there is none */
+static unsigned char *rec_slurp(const char *path, long max, size_t *n) {
+  FILE *f = fopen(path, "rb");
+  if (!f) return NULL;
+  fseek(f, 0, SEEK_END);
+  long size = ftell(f);
+  fseek(f, 0, SEEK_SET);
+  unsigned char *b = size >= 0 && size <= max ? malloc((size_t)size + 1) : NULL;
+  if (b && fread(b, 1, (size_t)size, f) != (size_t)size) free(b), b = NULL;
+  fclose(f);
+  if (b) b[size] = 0, *n = (size_t)size;
+  return b;
+}
+
+/* bytes to a file the whole way or not at all (written beside, then put in its place) */
+static int rec_put(const char *path, const unsigned char *b, size_t n) {
+  char tmp[1450];
+  snprintf(tmp, sizeof tmp, "%s.tmp", path);
+  FILE *f = fopen(tmp, "wb");
+  if (!f) return 0;
+  int bad = fwrite(b, 1, n, f) != n || fflush(f) != 0 || ferror(f);
+  bad |= fclose(f) != 0;
+  if (bad) {
+    remove(tmp);
+    return 0;
+  }
+#ifdef _WIN32
+  remove(path);
+#endif
+  return rename(tmp, path) == 0;
+}
+
+static void records_mkdir(void) {
+  char dir[1100];
+  snprintf(dir, sizeof dir, "%s/records", G.save_dir);
+#ifdef _WIN32
+  _mkdir(dir);
+#else
+  mkdir(dir, 0755);
+#endif
+}
+
+/* ---- the player's bests of a save: save_dir/records/card<n>.dat (save n's): a line with the player's best on each course (ms, 0 = none), then a line
+ * "car <course> <pack> <ms>" for each car type's best on a course. Read once from the plain save_dir/records<n> of the builds before it, when there is no .dat yet. ---- */
 int app_best_ms(int course) { return course >= 0 && course < CAR_COURSES ? G.best_ms[course] : 0; }
 
+static void card_path(char *p, size_t n, int slot) { snprintf(p, n, "%s/records/card%d.dat", G.save_dir, slot); }
+
+static void records_save(void);
 static void records_load(void) {
   char path[1100];
-  snprintf(path, sizeof path, "%s/records%d", G.save_dir, G.menu.save_slot);
-  FILE *f = G.menu.save_slot ? fopen(path, "r") : NULL;
-  for (int i = 0; i < CAR_COURSES; ++i)
-    if (!f || fscanf(f, "%d", &G.best_ms[i]) != 1 || G.best_ms[i] < 0) G.best_ms[i] = 0;
+  char *text = NULL;
+  size_t n = 0;
+  memset(G.best_ms, 0, sizeof G.best_ms);
   G.n_car_best = 0;
+  if (!G.menu.save_slot) return;
+  card_path(path, sizeof path, G.menu.save_slot);
+  unsigned char *b = rec_slurp(path, REC_MAX_BYTES, &n);
+  if (b) {
+    text = rec_unpack(MAGIC_CARD, b, n, NULL);
+    if (!text) fprintf(stderr, "records: %s could not be read (changed or damaged): the bests start over\n", path);
+    free(b);
+  } else { /* (a save from before the folder: its plain file, once) */
+    snprintf(path, sizeof path, "%s/records%d", G.save_dir, G.menu.save_slot);
+    text = (char *)rec_slurp(path, REC_MAX_BYTES, &n);
+  }
+  if (!text) return;
+  const char *p = text;
+  int used = 0;
+  for (int i = 0; i < CAR_COURSES; ++i) {
+    int v = 0;
+    if (sscanf(p, "%d%n", &v, &used) != 1) break;
+    p += used;
+    G.best_ms[i] = v > 0 ? v : 0;
+  }
   int course, pack, ms;
-  while (f && G.n_car_best < CAR_BEST_MAX && fscanf(f, " car %d %d %d", &course, &pack, &ms) == 3)
+  while (G.n_car_best < CAR_BEST_MAX && sscanf(p, " car %d %d %d%n", &course, &pack, &ms, &used) == 3) {
+    p += used;
     if (course >= 0 && course < CAR_COURSES && ms > 0) {
       G.car_best[G.n_car_best].course = course;
       G.car_best[G.n_car_best].pack = pack;
       G.car_best[G.n_car_best++].ms = ms;
     }
-  if (f) fclose(f);
+  }
+  free(text);
+  if (getenv("MT3DX_CARD_TEST")) { /* test: the bests as read, and the first course's best set to this many ms, kept (a second start reads it back) */
+    fprintf(stderr, "records: save %d: course 0 best %d ms, %d car bests\n", G.menu.save_slot, G.best_ms[0], G.n_car_best);
+    G.best_ms[0] = atoi(getenv("MT3DX_CARD_TEST"));
+    records_save();
+  }
 }
 
 static void records_save(void) {
-  char path[1100];
-  if (!G.menu.save_slot) return;
-  snprintf(path, sizeof path, "%s/records%d", G.save_dir, G.menu.save_slot);
-  FILE *f = fopen(path, "w");
-  if (!f) return;
-  for (int i = 0; i < CAR_COURSES; ++i) fprintf(f, "%d%c", G.best_ms[i], i + 1 < CAR_COURSES ? ' ' : '\n');
-  for (int i = 0; i < G.n_car_best; ++i) fprintf(f, "car %d %d %d\n", G.car_best[i].course, G.car_best[i].pack, G.car_best[i].ms);
-  fclose(f);
+  char path[1100], *text = malloc(64 * 1024);
+  if (!G.menu.save_slot || !text) {
+    free(text);
+    return;
+  }
+  size_t len = 0;
+  for (int i = 0; i < CAR_COURSES; ++i) len += (size_t)snprintf(text + len, 64 * 1024 - len, "%d%c", G.best_ms[i], i + 1 < CAR_COURSES ? ' ' : '\n');
+  for (int i = 0; i < G.n_car_best && len < 64 * 1024 - 80; ++i)
+    len += (size_t)snprintf(text + len, 64 * 1024 - len, "car %d %d %d\n", G.car_best[i].course, G.car_best[i].pack, G.car_best[i].ms);
+  size_t olen = 0;
+  unsigned char *out = rec_pack(MAGIC_CARD, text, len, &olen);
+  free(text);
+  if (!out) return;
+  records_mkdir();
+  card_path(path, sizeof path, G.menu.save_slot);
+  rec_put(path, out, olen);
+  free(out);
 }
 
 /* The machine time attack ranking, in save_dir/records/: every file in the folder is a list of runs, whatever its name, and they are merged (a run in two files counts once) into the
- * ranking the game shows (30 a course, fastest first). The game writes its own runs to records/my-times.txt only; to share times, send that file (rename it as you like) and put the
- * files you are sent in the folder: they are read at the start and again within a few seconds of a change, with the game running. A line is
+ * ranking the game shows (30 a course, fastest first). The game writes its own runs to records/my-times.rec only; to share times, send that file (rename it as you like) and put the
+ * files you are sent in the folder: they are read at the start and again within a few seconds of a change, with the game running. A line of the text inside is
  * "rank2 <course slot> <ms> <hp> <handling grade> <class> <name: 5 characters> <the car label, with " #n" past a first card of its model>", as the old save_dir/ranking has them,
- * which is still written beside (the same runs, for a build from before the folder) and read once, to start the folder's own file. A line this build cannot place (a car it has not,
- * a number out of range) is left out, and a file is read for no more than 2 MB. Every save together, as the arcade keeps it for every card. */
+ * which is read once, to start the folder's own file, and then left alone. A line this build cannot place (a car it has not, a number out of range) is left out, and a file that has
+ * been changed, or is not one, is left out whole. Every save together, as the arcade keeps it for every card. */
 static int car_by_label(const char *label, int *maker, int *car, int *slot);
-#define REC_OWN "my-times.txt"
-#define REC_MAX_BYTES (2L << 20)
-static menu_rank_row OWN_ROW[MENU_RANK_COURSES][MENU_RANK_KEEP]; /* the runs made here: what my-times.txt keeps, whatever the others' files push out of the shown ranking */
+#define REC_OWN "my-times.rec"
+static menu_rank_row OWN_ROW[MENU_RANK_COURSES][MENU_RANK_KEEP]; /* the runs made here: what my-times.rec keeps, whatever the others' files push out of the shown ranking */
 static unsigned char OWN_N[MENU_RANK_COURSES];
 static unsigned long REC_SIG; /* the folder as it was read (names, sizes, times) */
 static int REC_FILES, REC_RUNS;
@@ -760,7 +925,7 @@ static int own_add(int course, const menu_rank_row *row) {
   return 1;
 }
 
-/* one line of a records file: 1 and the run, or 0 */
+/* one line of a records file's text: 1 and the run, or 0 */
 static int rank_parse(const char *line, int *course_out, menu_rank_row *row) {
   int course, ms, hp, grade, nm[5];
   char label[220];
@@ -782,16 +947,16 @@ static int rank_parse(const char *line, int *course_out, menu_rank_row *row) {
   return 1;
 }
 
-/* a records file into the ranking shown (and, for the own one, into the own list): the runs it gave */
-static int rank_read_file(const char *path, int own) {
-  FILE *f = fopen(path, "r");
-  if (!f) return 0;
-  fseek(f, 0, SEEK_END);
-  long size = ftell(f);
-  fseek(f, 0, SEEK_SET);
+/* the lines of a text into the ranking shown (and, for the own file, into the own list): the runs it gave */
+static int rank_add_text(const char *text, int own) {
   int got = 0, lines = 0;
   char line[320];
-  while (size <= REC_MAX_BYTES && lines++ < 20000 && fgets(line, sizeof line, f)) {
+  for (const char *p = text; *p && lines++ < 20000;) {
+    const char *e = strchr(p, '\n');
+    size_t len = e ? (size_t)(e - p) : strlen(p);
+    if (len >= sizeof line) len = sizeof line - 1;
+    memcpy(line, p, len), line[len] = 0;
+    p = e ? e + 1 : p + strlen(p);
     int course;
     menu_rank_row row;
     if (!rank_parse(line, &course, &row)) continue;
@@ -799,33 +964,49 @@ static int rank_read_file(const char *path, int own) {
     if (!rank_has(G.menu.rank_row[course], G.menu.rank_n[course], &row)) menu_rank_add(&G.menu, course, &row);
     got++;
   }
-  fclose(f);
   return got;
 }
 
-/* the own runs, as lines (the folder's file starts with a note on what the file is) */
-static int rank_write_file(const char *path, int note) {
-  char tmp[1110];
-  snprintf(tmp, sizeof tmp, "%s.tmp", path);
-  FILE *f = fopen(tmp, "w");
-  if (!f) return 0;
-  if (note) fprintf(f, "# Super3DX+ time attack records. Send this file to share your times; put the files you are sent in this folder, any name: the game merges them.\n");
+/* a records file into the ranking: the runs it gave, -1 if it is not one (or has been changed), -2 if it is a save's bests (not a ranking file: left alone) */
+static int rank_read_file(const char *path, int own) {
+  size_t n = 0;
+  unsigned char *b = rec_slurp(path, REC_MAX_BYTES, &n);
+  if (!b) return -1;
+  if (n >= 4 && !memcmp(b, MAGIC_CARD, 4)) {
+    free(b);
+    return -2;
+  }
+  char *text = rec_unpack(MAGIC_RANK, b, n, NULL);
+  free(b);
+  if (!text) return -1;
+  int got = rank_add_text(text, own);
+  free(text);
+  return got;
+}
+
+/* the own runs, packed, into the folder's own file */
+static int rank_write_own(void) {
+  size_t cap = (size_t)MENU_RANK_COURSES * MENU_RANK_KEEP * 320 + 16, len = 0;
+  char *text = malloc(cap);
+  if (!text) return 0;
+  text[0] = 0;
   for (int course = 0; course < MENU_RANK_COURSES; ++course)
     for (int i = 0; i < OWN_N[course]; ++i) {
       const menu_rank_row *r = &OWN_ROW[course][i];
-      fprintf(f, "rank2 %d %d %d %d %d %d %d %d %d %d %s\n", course, r->ms, r->hp, r->grade, r->cls, r->name[0], r->name[1], r->name[2], r->name[3], r->name[4],
-              CARDB_CARS[r->maker][r->car].label);
+      len += (size_t)snprintf(text + len, cap - len, "rank2 %d %d %d %d %d %d %d %d %d %d %s\n", course, r->ms, r->hp, r->grade, r->cls, r->name[0], r->name[1], r->name[2], r->name[3],
+                              r->name[4], CARDB_CARS[r->maker][r->car].label);
+      if (len >= cap - 340) break;
     }
-  int bad = fflush(f) != 0 || ferror(f);
-  bad |= fclose(f) != 0;
-  if (bad) {
-    remove(tmp);
-    return 0;
-  }
-#ifdef _WIN32
-  remove(path);
-#endif
-  return rename(tmp, path) == 0;
+  size_t olen = 0;
+  unsigned char *out = rec_pack(MAGIC_RANK, text, len, &olen);
+  free(text);
+  if (!out) return 0;
+  records_mkdir();
+  char path[1400];
+  snprintf(path, sizeof path, "%s/records/" REC_OWN, G.save_dir);
+  int ok = rec_put(path, out, olen);
+  free(out);
+  return ok;
 }
 
 /* the folder's names, sizes and times as one number (0 for no folder) */
@@ -857,25 +1038,28 @@ static unsigned long records_signature(int *files) {
 static void records_reload(void) {
   char dir[1100], path[1400];
   snprintf(dir, sizeof dir, "%s/records", G.save_dir);
-#ifdef _WIN32
-  _mkdir(dir);
-#else
-  mkdir(dir, 0755);
-#endif
+  records_mkdir();
   memset(G.menu.rank_n, 0, sizeof G.menu.rank_n);
   memset(OWN_N, 0, sizeof OWN_N);
   snprintf(path, sizeof path, "%s/" REC_OWN, dir);
   int migrate = 0, runs = 0;
-  FILE *probe = fopen(path, "r");
+  size_t n = 0;
+  unsigned char *probe = rec_slurp(path, REC_MAX_BYTES, &n);
   if (probe) {
-    fclose(probe);
-    runs += rank_read_file(path, 1);
+    free(probe);
+    int got = rank_read_file(path, 1);
+    if (got < 0) fprintf(stderr, "records: %s could not be read (changed or damaged): its runs are not counted\n", path);
+    else runs += got;
   } else {
     char old[1100];
     snprintf(old, sizeof old, "%s/ranking", G.save_dir);
-    int got = rank_read_file(old, 1); /* (the old file: kept as it is, and written beside from now on) */
-    runs += got;
-    migrate = got > 0;
+    char *text = (char *)rec_slurp(old, REC_MAX_BYTES, &n); /* (the plain file of the builds before: read once, and left as it is) */
+    if (text) {
+      int got = rank_add_text(text, 1);
+      free(text);
+      runs += got;
+      migrate = got > 0;
+    }
   }
   DIR *d = opendir(dir);
   struct dirent *e;
@@ -886,15 +1070,16 @@ static void records_reload(void) {
     snprintf(path, sizeof path, "%s/%s", dir, e->d_name);
     if (stat(path, &st) != 0 || !S_ISREG(st.st_mode)) continue;
     int got = rank_read_file(path, 0);
+    if (got == -2) continue;
+    if (got < 0) {
+      fprintf(stderr, "records: %s: not a records file, or changed since it was made: left out\n", e->d_name);
+      continue;
+    }
     runs += got;
     fprintf(stderr, "records: %s: %d runs\n", e->d_name, got);
   }
   if (d) closedir(d);
-  if (migrate) {
-    snprintf(path, sizeof path, "%s/" REC_OWN, dir);
-    rank_write_file(path, 1);
-    fprintf(stderr, "records: the old ranking file is now %s\n", path);
-  }
+  if (migrate && rank_write_own()) fprintf(stderr, "records: the old ranking file is now %s/" REC_OWN "\n", dir);
   REC_SIG = records_signature(&REC_FILES);
   REC_RUNS = runs;
   int shown = 0;
@@ -928,11 +1113,7 @@ static void records_poll(void) {
 }
 
 static void ranking_save(void) {
-  char path[1400], old[1100];
-  snprintf(path, sizeof path, "%s/records/" REC_OWN, G.save_dir);
-  snprintf(old, sizeof old, "%s/ranking", G.save_dir);
-  rank_write_file(path, 1);
-  rank_write_file(old, 0);
+  rank_write_own();
   REC_SIG = records_signature(&REC_FILES); /* (what the game wrote is not a change to read) */
 }
 
@@ -1758,6 +1939,11 @@ static void save_erase(int n) {
     snprintf(path, sizeof path, "%s/%s%d", G.save_dir, WHAT[i], n);
     remove(path);
   }
+  { /* (and the bests in the records folder) */
+    char path[1100];
+    card_path(path, sizeof path, n);
+    remove(path);
+  }
   if (G.menu.save_slot == n) {
     G.menu.save_slot = 0;
     save_slot_write();
@@ -1773,6 +1959,8 @@ static void save_take(void) {
   if (G.menu.save_pick_new) {
     char path[1100];
     snprintf(path, sizeof path, "%s/records%d", G.save_dir, G.menu.save_slot);
+    remove(path);
+    card_path(path, sizeof path, G.menu.save_slot);
     remove(path);
     garage_save();
   } else {
