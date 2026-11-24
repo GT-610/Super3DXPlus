@@ -2312,7 +2312,6 @@ static int graphics_rows(menu_state *m, orow r[16]) {
     r[n++] = (orow){ "RESOLUTION SCALE", "HOW SHARP THE 3D IS DRAWN. LOWER IS FASTER ON A SLOW GPU", OK_STEP, &m->rscale, 6, RSCALE_NAME };
   }
   if (m->res_row) r[n++] = (orow){ "RESOLUTION", "TAKES EFFECT AT THE NEXT START", OK_RES, &m->hires };
-  if (m->loader_row) r[n++] = (orow){ "BACKGROUND LOADING", "LOADS CARS AND TRACKS WHILE YOU BROWSE: SMOOTHER RACES, A SLOWER FIRST LOAD. TAKES EFFECT AT THE NEXT START", OK_SWITCH, &m->loader_on };
   if (m->win_row) r[n++] = (orow){ "WINDOW MODE", "WINDOWED OR FULLSCREEN (F11 OR ALT+ENTER ANYTIME)", OK_WIN, &m->fullscreen };
   r[n++] = (orow){ "SMOOTH MOTION", "EVEN MOTION ON 90/120/144 HZ SCREENS AND IN VERSUS. ADDS ONE FRAME OF DELAY", OK_SWITCH, &m->smooth_on };
   if (m->fps_row) r[n++] = (orow){ "60 FPS LOCK", "ASKS FOR A 60 HZ SCREEN. HELPS ON 90/120 HZ PHONES THAT DROP TO 45 (ANDROID 11+)", OK_SWITCH, &m->lock60 };
@@ -2320,11 +2319,13 @@ static int graphics_rows(menu_state *m, orow r[16]) {
   return n;
 }
 
-static int debug_rows(menu_state *m, orow r[4]) {
+static int debug_rows(menu_state *m, orow r[8]) {
   r[0] = (orow){ "INPUT READOUT", "THE STEERING, GAS AND BRAKE BARS AND THE RAW AXES WHILE DRIVING", OK_SWITCH, &m->readout_on };
   r[1] = (orow){ "FPS COUNTER", "THE FRAME RATE AT THE TOP OF THE RACE (THE TOUCH HUD ALWAYS HAS ITS OWN)", OK_SWITCH, &m->fps_on };
   r[2] = (orow){ "PHYSICS PANEL", "THE CAR'S SLIP, GRIP IN USE AND G FORCES OVER THE RACE (F4 ON A KEYBOARD)", OK_SWITCH, &m->phys_on };
-  return 3;
+  int n = 3;
+  if (m->loader_row) r[n++] = (orow){ "BACKGROUND LOADING", "THE MAC'S LOADING THREAD: ON LOADS CARS AND TRACKS WHILE YOU BROWSE (SMOOTHER RACES, A SLOWER FIRST LOAD), OFF LOADS IN THE MENU FRAMES' SPARE TIME. THE NEXT START", OK_SWITCH, &m->loader_on };
+  return n;
 }
 
 /* chip c of a row chosen (not for the sub-menu's button) */
@@ -2721,7 +2722,7 @@ static void hudopt_step(menu_state *m, const menu_in *in) {
     option_back_to(m, OK_SUB);
     return;
   }
-  orow r[4];
+  orow r[8];
   int n = debug_rows(m, r);
   optl_step(m, r, n, &m->hud_row, in);
 }
@@ -2746,7 +2747,7 @@ static void draw_hudopt(const menu_state *m, int clock, int bars, float screen_w
   hud_ui_begin(screen_w, screen_h);
   if (!tb) hud_ui_text("DEBUG OPTIONS", 24.0f * k, 40.0f * k, 4.0f, 1, 1, 1, 1);
   hud_ui_end();
-  orow r[4];
+  orow r[8];
   int n = debug_rows((menu_state *)m, r);
   draw_optlist(m, r, n, m->hud_row, OPTL_DY_DEBUG, screen_w, screen_h);
 }
@@ -11126,7 +11127,7 @@ static int menu_pointer(const menu_state *m, menu_in *in) {
     return 1;
   }
   if (m->screen == MENU_HUDOPT) { /* a row, and a chip on it */
-    orow r[4];
+    orow r[8];
     optl_pointer(m, in, r, debug_rows((menu_state *)m, r), OPTL_DY_DEBUG);
     return 1;
   }
