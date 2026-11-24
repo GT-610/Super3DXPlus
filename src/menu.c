@@ -2692,7 +2692,7 @@ static void draw_portinfo(const menu_state *m, int clock, int bars, float screen
   if (!tb) hud_ui_text("INFORMATION", 24.0f * k, 40.0f * k, 4.0f, 1, 1, 1, 1);
   /* (a line starting with # is a heading) */
   static const char *const lines[] = {
-    "#SUPER 3DX+",
+    "#SUPER3DX+ Ver. " PORT_VERSION, /* (the version is in the first heading) */
     "A NATIVE, CONSOLE-STYLE PORT OF WANGAN MIDNIGHT MAXIMUM TUNE",
     "3DX+ WITH CONTROLLER SUPPORT, OVERHAULED MENUS AND GARAGE,",
     "A MOUNTAIN OF BUGFIXES, RESTORATIONS, AND MORE.",
@@ -2712,12 +2712,8 @@ static void draw_portinfo(const menu_state *m, int clock, int bars, float screen
   float y = 92.0f;
   for (int i = 0; i < (int)(sizeof lines / sizeof *lines); i++, y += 20.0f) {
     const char *s = lines[i];
-    if (*s == '#') {
-      float end = hud_ui_text(s + 1, 24.0f * k, y * k, 2.9f, 1.0f, 0.55f, 0.15f, 1);
-      if (i == 0) hud_ui_text("SUPER3DX+ Ver. " PORT_VERSION, end + 14.0f * k, y * k + 5.0f, 2.2f, 1.0f, 1.0f, 1.0f, 1); /* (the version, beside the first heading) */
-    } else {
-      hud_ui_text(s, 24.0f * k, y * k, 2.2f, 0.9f, 0.9f, 0.9f, 1);
-    }
+    if (*s == '#') hud_ui_text(s + 1, 24.0f * k, y * k, 2.9f, 1.0f, 0.55f, 0.15f, 1);
+    else hud_ui_text(s, 24.0f * k, y * k, 2.2f, 0.9f, 0.9f, 0.9f, 1);
   }
   hud_ui_end();
 }
