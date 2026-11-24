@@ -2319,7 +2319,7 @@ static int debug_rows(menu_state *m, orow r[8]) {
   r[1] = (orow){ "FPS COUNTER", "THE FRAME RATE AT THE TOP OF THE RACE (THE TOUCH HUD ALWAYS HAS ITS OWN)", OK_SWITCH, &m->fps_on };
   r[2] = (orow){ "PHYSICS PANEL", "THE CAR'S SLIP, GRIP IN USE AND G FORCES OVER THE RACE (F4 ON A KEYBOARD)", OK_SWITCH, &m->phys_on };
   int n = 3;
-  if (m->loader_row) r[n++] = (orow){ "BACKGROUND LOADING", "THE MAC'S LOADING THREAD: ON LOADS CARS AND TRACKS WHILE YOU BROWSE (SMOOTHER RACES, A SLOWER FIRST LOAD), OFF LOADS IN THE MENU FRAMES' SPARE TIME. THE NEXT START", OK_SWITCH, &m->loader_on };
+  if (m->loader_row) r[n++] = (orow){ "BACKGROUND LOADING", "ON LOADS CARS AND TRACKS WHILE YOU BROWSE: SMOOTHER RACES, A SLOWER FIRST LOAD.\nOFF LOADS IN THE MENU FRAMES' SPARE TIME. TAKES EFFECT AT THE NEXT START", OK_SWITCH, &m->loader_on };
   return n;
 }
 
@@ -2436,7 +2436,14 @@ static void draw_optlist(const menu_state *m, const orow *rows, int n, int sel, 
       hud_ui_text(o->kind == OK_STEP ? o->names[on >= 0 && on <= o->max ? on : 0] : o->kind == OK_MIP ? MIP_NAME[on >= 0 && on < 4 ? on : 2] : pct, (x + w + 14.0f) * k, y * k - 3.5f * chip_px, chip_px, 1, 0.55f, 0.15f, 1);
     }
   }
-  hud_ui_text(rows[sel].note, 20.0f * k, 380.0f * k, 1.7f, 0.85f, 0.85f, 0.85f, 1);
+  { /* (a note with a line break in it is two lines: the second 14 below) */
+    char line[256];
+    snprintf(line, sizeof line, "%s", rows[sel].note);
+    char *nl = strchr(line, '\n');
+    if (nl) *nl = 0;
+    hud_ui_text(line, 20.0f * k, 380.0f * k, 1.7f, 0.85f, 0.85f, 0.85f, 1);
+    if (nl) hud_ui_text(nl + 1, 20.0f * k, 394.0f * k, 1.7f, 0.85f, 0.85f, 0.85f, 1);
+  }
   hud_ui_end();
 }
 
