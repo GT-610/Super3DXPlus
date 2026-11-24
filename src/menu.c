@@ -10205,14 +10205,12 @@ static int vs_glyphs(const menu_state *m, int i) { return m->vs.glyph[i][0] >= 0
 
 static int vs_host(const menu_state *m) { return m->vs.state == MENU_VS_LOBBY && m->vs.me == m->vs.host; }
 
+static int vs_visible(const menu_state *m, int b);
+
 /* which of the screen's buttons is at (x, y) and on now: its number, -1 none */
 static int vs_hit(const menu_state *m, float x, float y) {
   for (int b = 0; b < VS_BUTTONS; ++b) {
-    if (b < VS_KEYS && m->vs.state != MENU_VS_OFF) continue;
-    if (b < VS_KEYS && m->vs.kind != MENU_VS_NET && b >= m->vs.n_found) continue;
-    if (b == VS_HOSTNET && (m->vs.kind != MENU_VS_NET || m->vs.state != MENU_VS_OFF)) continue;
-    if (b > VS_CONNECT && b != VS_HOSTNET && !vs_host(m)) continue;
-    if (b == VS_RAMP_L || b == VS_RAMP_R) continue; /* the area is voted (MENU_VS_AREA) */
+    if (!vs_visible(m, b)) continue; /* (the same test the keys' focus uses: a player's READY and AUTO READY are the host's START's place, and were skipped here, so a click or a touch never reached them, issue 26) */
     float r[4];
     vs_button(m, b, r);
     if (x >= r[0] - 6 && x < r[0] + r[2] + 6 && y >= r[1] - 4 && y < r[1] + r[3] + 4) return b;
