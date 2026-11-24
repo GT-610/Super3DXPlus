@@ -794,7 +794,7 @@ static int phys_have; /* read_phys has a last frame's velocity to work from */
 /* The gear the player was in when a race that is running went back to a countdown (a cutscene of a story or 10-in-a-row race that ends in a rolling start again: the arcade's
  * transmission goes back to SetFirst's gear, 2nd, and the driver's gear was lost: 4th became 2nd after the scene, issue 41). Kept from the last running step and put back in
  * the engine (and the manual's lever) for as long as the countdown runs. */
-static struct { int running, keep, active; } GK;
+static struct { int running, keep, active, orig, forced; float spd; } GK; /* (spd: the speed of the last running step; orig: the engine's own gear when the keeping began, forced: it has been written over) */
 /* A story select's second race starts as a new race after its movie (car_start twice), but the driver is still the one who was in the first race's gear (issue 41,
  * chapter 15: 4th before the scene, 2nd after): the gear the first race ended in, held through the second one's countdown like GK's. 0 none. */
 static int CARRY, CARRY_LIVE; /* (live: a race has started since it was kept: the first one's last steps do not use it up) */
@@ -1952,13 +1952,22 @@ void car_update(car_state *c, const car_input *in) {
         if (P.manual) P.lever = CARRY - 1 > P.top_lever ? P.top_lever : CARRY - 1;
       }
     }
-    if (running) GK.running = 1, GK.keep = gear, GK.active = 0, CARRY = CARRY_LIVE ? 0 : CARRY;
+    if (running) GK.running = 1, GK.keep = gear, GK.active = 0, GK.forced = 0, GK.spd = fabsf(c->speed), CARRY = CARRY_LIVE ? 0 : CARRY;
     else if (GK.running && c->race.countdown > 0.0f && c->race.play_state <= 2 && GK.keep >= 1) {
-      GK.running = 0, GK.active = 1;
+      GK.running = 0, GK.active = 1, GK.forced = 0;
       fprintf(stderr, "gear: the race went back to a countdown in gear %d (the engine's now %d, the lever %d): keeping %d\n", GK.keep, gear, P.lever + 1, GK.keep);
+    }
+    /* A cutscene's restart goes on at the car's speed, so the gear it was in is still the right one; the 10-in-a-row's restart after a beaten rival is a rolling start at a
+     * speed of its own, where the arcade's 2nd is the right gear and a kept 5th is money-shifted down at the lights (a car that slows a great deal). A car that is well
+     * under the speed it had is that one: the arcade's gear goes back in. */
+    if (GK.active && c->race.countdown > 0.0f && GK.spd > 15.0f && fabsf(c->speed) < 0.6f * GK.spd) {
+      fprintf(stderr, "gear: not kept: the restart's speed %.0f km/h is well under the %.0f it had (a rolling start): the arcade's %d stays\n", (double)fabsf(c->speed) * 3.6, (double)GK.spd * 3.6, GK.forced ? GK.orig : gear);
+      if (GK.forced && GK.orig >= 1) W32(P.m + M_ENGINE + 0x3c, (uint32_t)GK.orig), gear = GK.orig;
+      GK.active = 0, GK.keep = 0;
     }
     if (GK.active) {
       if (c->race.countdown > 0.0f) {
+        if (!GK.forced) GK.orig = (int)M32(P.m + M_ENGINE + 0x3c), GK.forced = 1;
         if (gear != GK.keep) W32(P.m + M_ENGINE + 0x3c, (uint32_t)GK.keep), gear = GK.keep;
         if (P.manual) P.lever = GK.keep - 1 > P.top_lever ? P.top_lever : GK.keep - 1;
       } else {
