@@ -331,7 +331,8 @@ void render_blur_size(int *w, int *h);
 /* A phone of today's (Android): the 3D from then on through a multisampled (samples) half-float
  * target with a bloom (its share bloom) and a highlights' roll-off, by render_blur_begin/end
  * every frame. 0 if the GPU has not what it takes (and nothing changes). */
-int render_hq(int samples, float bloom);
+int render_hq(int samples, float bloom); /* (samples 1: none, the rest of the chain as it is) */
+void render_hq_scale(float scale);
 /* With render_hq: screen-space ambient occlusion of strength k (0 none, 1 full), from the
  * depth of each frame whose view render_hq_view gave (the race's): near and far planes, the
  * tangents of the half angles across (x) and up (y). */

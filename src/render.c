@@ -1516,6 +1516,7 @@ static struct {
   /* render_hq_level's: what has been given up for the frame rate, and as asked: the share
    * of the screen's size the 3D is drawn at, the samples and the bloom */
   int level, samples0;
+  float user_scale; /* the RESOLUTION SCALE option's share, on top of the level's */
   float scale, bloom0;
   int opt_bloom, opt_ao, opt_paint, opt_wet; /* render_hq_options' (the settings' switches) */
   hq_tex_ms_fn tex_ms;
@@ -1852,8 +1853,10 @@ int render_hq(int samples, float bloom) {
   GLint most = 0;
   glGetIntegerv(GL_MAX_SAMPLES_, &most);
   hq.samples = hq.samples0 = samples < most ? samples : most;
+  if (samples == 1) hq.samples = hq.samples0 = 0; /* (1: the ANTI-ALIASING OFF's: no multisampling, the rest of the chain as it is) */
   hq.bloom = hq.bloom0 = bloom;
   hq.scale = 1.0f;
+  hq.user_scale = 1.0f;
   hq.level = 0;
   hq.opt_bloom = hq.opt_ao = hq.opt_paint = hq.opt_wet = 1;
   const char *attribs[] = { "aPos" };
@@ -1951,13 +1954,22 @@ int render_hq_level(int level) {
   level = level < 0 ? 0 : level >= HQ_LEVELS_N ? HQ_LEVELS_N - 1 : level;
   hq.level = level;
   int samples = HQ_LEVEL[level].samples && HQ_LEVEL[level].samples < hq.samples0 ? HQ_LEVEL[level].samples : hq.samples0;
-  if (samples != hq.samples || HQ_LEVEL[level].scale != hq.scale) {
+  float scale = HQ_LEVEL[level].scale * hq.user_scale;
+  if (samples != hq.samples || scale != hq.scale) {
     hq.samples = samples;
-    hq.scale = HQ_LEVEL[level].scale;
+    hq.scale = scale;
     blur.w = blur.h = 0; /* the targets again, at the new size */
   }
   hq.bloom = HQ_LEVEL[level].bloom && hq.opt_bloom ? hq.bloom0 : 0.0f;
   return level;
+}
+
+/* the RESOLUTION SCALE option: the share of the screen's size the 3D is drawn at (0.4 to 1), under the frame rate's own steps */
+void render_hq_scale(float scale) {
+  scale = scale < 0.4f ? 0.4f : scale > 1.0f ? 1.0f : scale;
+  if (!hq.on || scale == hq.user_scale) return;
+  hq.user_scale = scale;
+  render_hq_level(hq.level);
 }
 
 void render_hq_options(int bloom, int ao, int paint, int wet) {

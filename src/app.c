@@ -978,12 +978,30 @@ static int options_peek(int k, int def) {
   return n > k ? v[k] : def;
 }
 
+/* save_dir/option's "gfx2" line (ANTI-ALIASING 0 off, 1 2X, 2 4X; the RESOLUTION SCALE step), or the defaults of a file without it: 2X, full size (the 4X of the older option line counts) */
+static void options_peek_gfx2(int *aa, int *rs) {
+  char path[1100], line[512];
+  *aa = options_peek(12, 0) ? 2 : 1, *rs = 6;
+  snprintf(path, sizeof path, "%s/option", G.save_dir);
+  FILE *f = fopen(path, "r");
+  if (!f) return;
+  while (fgets(line, sizeof line, f)) {
+    int a, r;
+    if (sscanf(line, "gfx2 %d %d", &a, &r) == 2) {
+      if (a >= 0 && a <= 2) *aa = a;
+      if (r >= 0 && r <= 6) *rs = r;
+    }
+  }
+  fclose(f);
+}
+
 /* The OPTION screen's graphics switches to the renderer (Android, render_hq on): the bloom,
  * the SSAO (its targets made the first time it is on), the last frame's reflections (the
  * paint's, the wet road's), the maps' HD packs (the map and its extras opened again at the
  * next menu frame); the wet road's strength is the race's (G.rp.wet) */
 static void hq_apply(void) {
   if (!G.hq_on) return;
+  render_hq_scale(MENU_RSCALE[G.menu.rscale >= 0 && G.menu.rscale <= 6 ? G.menu.rscale : 6]);
   int bloom = G.menu.bloom_on, ssao = G.menu.ssao_on, env = (G.menu.over_on ? 1 : 0) | (G.menu.wet_on ? 2 : 0);
   if (ssao && !G.hq_ssao_made) render_ssao(1.0f), G.hq_ssao_made = 1;
   if (bloom != G.hq_bloom || ssao != G.hq_ssao || env != G.hq_env) {
@@ -1078,8 +1096,12 @@ static int options_load(void) {
   if (n >= 3 && fscanf(f, " smooth %d", &sm) == 1) G.menu.smooth_on = sm != 0;
   int ta = 10; /* (the touch controls' BUTTON OPACITY, after it: solid unless the file says less) */
   if (n >= 3 && fscanf(f, " touchalpha %d", &ta) == 1) G.menu.key_alpha = ta < 1 ? 1 : ta > 10 ? 10 : ta;
+  int g2[2] = { -1, 6 }; /* (ANTI-ALIASING's three steps and the RESOLUTION SCALE's, after it: a file from before has the 2X / 4X the option line says, and the full size) */
+  int have_g2 = n >= 3 && fscanf(f, " gfx2 %d %d", &g2[0], &g2[1]) == 2;
   fclose(f);
   if (n < 3) return 0;
+  G.menu.aa_mode = have_g2 && g2[0] >= 0 && g2[0] <= 2 ? g2[0] : hq[5] ? 2 : 1;
+  G.menu.rscale = have_g2 && g2[1] >= 0 && g2[1] <= 6 ? g2[1] : 6;
   G.menu.hires = hires != 0;
   G.menu.hd_tex = hq[0] != 0, G.menu.bloom_on = hq[1] != 0, G.menu.ssao_on = hq[2] != 0;
   G.menu.wet_on = hq[3] != 0, G.menu.paint_on = hq[4] != 0, G.menu.aa4 = hq[5] != 0;
@@ -1117,6 +1139,8 @@ static void options_save(void) {
   for (int g = 3; g < HUD_KEY_GROUPS; ++g) /* (the shift keys' own, after them) */
     now[72 + (g - 3) * 3] = G.menu.key_k[g], now[73 + (g - 3) * 3] = G.menu.key_dx[g], now[74 + (g - 3) * 3] = G.menu.key_dy[g];
   now[78] = G.menu.lock60, now[79] = G.menu.smooth_on, now[80] = G.menu.key_alpha;
+  now[81] = G.menu.aa_mode, now[82] = G.menu.rscale;
+  now[12] = G.menu.aa_mode == 2; /* (the option line's 4X, as it was) */
   if (G.options_global && !memcmp(now, last, sizeof now)) return;
   char path[1100];
   snprintf(path, sizeof path, "%s/option", G.save_dir);
@@ -1152,6 +1176,7 @@ static void options_save(void) {
   fprintf(f, "lock60 %d\n", now[78]);
   fprintf(f, "smooth %d\n", now[79]);
   fprintf(f, "touchalpha %d\n", now[80]);
+  fprintf(f, "gfx2 %d %d\n", now[81], now[82]);
   fclose(f);
   memcpy(last, now, sizeof last);
   G.options_global = 1;
@@ -1678,11 +1703,14 @@ int app_init(const char *data_dir, int fb_width, int fb_height, float screen_w, 
     /* (hq_2x: 2x MSAA, to weigh against the 4x) */
     snprintf(path, sizeof path, "%s/hq_2x", G.data_dir);
     /* (and the OPTION screen's ANTI-ALIASING 2X, save_dir/option's 13th: from this start) */
-    int ms2 = access(path, F_OK) == 0 || !options_peek(12, 0);
+    int aa_mode, rs_step;
+    options_peek_gfx2(&aa_mode, &rs_step);
+    int ms2 = access(path, F_OK) == 0 || aa_mode == 1;
     /* (hq_blits: the multisampled buffers resolved by blits, not rendered into textures) */
     snprintf(path, sizeof path, "%s/hq_blits", G.data_dir);
     if (access(path, F_OK) == 0) render_hq_blits();
-    G.hq_on = render_hq(ms2 ? 2 : 4, 0.6f);
+    G.hq_on = render_hq(aa_mode == 0 ? 1 : ms2 ? 2 : 4, 0.6f); /* (1: no multisampling) */
+    render_hq_scale(MENU_RSCALE[rs_step]);
     G.hq_bloom = -1; /* (hq_apply hands render_hq the switches whatever they are) */
     /* the race's ambient occlusion only with a file ssao_on or the OPTION screen's SSAO (its
      * 20 ms on the Mi 6 cost the 60 fps; hq_apply) */

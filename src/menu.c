@@ -2262,10 +2262,13 @@ static void draw_layout(const menu_state *m, int clock, float screen_w, float sc
  * each time (the graphics rows the build offers: Android's, an iPad's resolution). The touch controls are the CONTROLS screen's. ---- */
 static int option_touch(void) { return hud_style() == HUD_STYLE_TOUCH; }
 
-enum { OK_SWITCH, OK_MIP, OK_RES, OK_AA, OK_SUB, OK_INFO, OK_RUMBLE, OK_PCT, OK_WIN, OK_DISPLAY, OK_NET, OK_ACT, OK_GFX };
+enum { OK_SWITCH, OK_MIP, OK_RES, OK_AA, OK_SUB, OK_INFO, OK_RUMBLE, OK_PCT, OK_WIN, OK_DISPLAY, OK_NET, OK_ACT, OK_GFX, OK_STEP };
 #define IS_RES(r) ((r)->kind == OK_RES || (r)->kind == OK_WIN) /* a choice of two, the value the chip (0 the left) */
 #define IS_SUB(r) ((r)->kind == OK_SUB || (r)->kind == OK_INFO || (r)->kind == OK_RUMBLE || (r)->kind == OK_DISPLAY || (r)->kind == OK_NET || (r)->kind == OK_ACT || (r)->kind == OK_GFX) /* a row that is a button to another screen */
-typedef struct { const char *name, *note; int kind; int *v; } orow;
+typedef struct { const char *name, *note; int kind; int *v; int max; const char *const *names; } orow; /* (OK_STEP: the value 0..max, named by names) */
+static const char *const AA_NAME[3] = { "OFF", "2X", "4X" };
+static const char *const RSCALE_NAME[7] = { "50%", "60%", "70%", "75%", "80%", "90%", "100%" };
+const float MENU_RSCALE[7] = { 0.5f, 0.6f, 0.7f, 0.75f, 0.8f, 0.9f, 1.0f };
 
 static const char *const MIP_NAME[4] = { "SOFT", "NORMAL", "SHARP", "SHARPER" };
 static const float MIP_BIAS[4] = { 0.0f, -1.0f, -2.0f, -3.0f };
@@ -2305,7 +2308,8 @@ static int graphics_rows(menu_state *m, orow r[16]) {
   if (m->hq_rows) {
     r[n++] = (orow){ "HD TEXTURES", "USE THE OPTIONAL UPSCALED TEXTURES", OK_SWITCH, &m->hd_tex };
     r[n++] = (orow){ "WET ROAD", "ADDS SCREENSPACE REFLECTIONS TO THE ROAD SURFACE", OK_SWITCH, &m->wet_on };
-    r[n++] = (orow){ "ANTI-ALIASING", "MSAA: SMOOTHS HARD EDGES", OK_AA, &m->aa4 };
+    r[n++] = (orow){ "ANTI-ALIASING", "MSAA: SMOOTHS HARD EDGES. OFF IS THE LIGHTEST. TAKES EFFECT AT THE NEXT START", OK_STEP, &m->aa_mode, 2, AA_NAME };
+    r[n++] = (orow){ "RESOLUTION SCALE", "HOW SHARP THE 3D IS DRAWN. LOWER IS FASTER ON A SLOW GPU", OK_STEP, &m->rscale, 6, RSCALE_NAME };
   }
   if (m->res_row) r[n++] = (orow){ "RESOLUTION", "TAKES EFFECT AT THE NEXT START", OK_RES, &m->hires };
   if (m->win_row) r[n++] = (orow){ "WINDOW MODE", "WINDOWED OR FULLSCREEN (F11 OR ALT+ENTER ANYTIME)", OK_WIN, &m->fullscreen };
@@ -2328,6 +2332,16 @@ static void optl_chip_set(menu_state *m, const orow *r, int c) {
   if (r->kind == OK_PCT) { /* (the vibration's tenths: the left chip one less, the right one more) */
     int to = *r->v + (c == 0 ? -1 : 1);
     if (to < 0 || to > 10) {
+      snd_menu(SND_CANCEL);
+      return;
+    }
+    *r->v = to, m->garage_changed = 1;
+    snd_menu(SND_CURSOR);
+    return;
+  }
+  if (r->kind == OK_STEP) { /* (a setting with names: the left chip one less, the right one more) */
+    int to = *r->v + (c == 0 ? -1 : 1);
+    if (to < 0 || to > r->max) {
       snd_menu(SND_CANCEL);
       return;
     }
@@ -2368,7 +2382,8 @@ static int optl_step(menu_state *m, const orow *rows, int n, int *sel, const men
   }
   if (in->ok) {
     if (IS_SUB(r)) return 1;
-    if (r->kind == OK_MIP) m->mip = (m->mip + 1) % 4, m->garage_changed = 1, snd_menu(SND_CURSOR);
+    if (r->kind == OK_STEP) *r->v = (*r->v + 1) % (r->max + 1), m->garage_changed = 1, snd_menu(SND_CURSOR);
+    else if (r->kind == OK_MIP) m->mip = (m->mip + 1) % 4, m->garage_changed = 1, snd_menu(SND_CURSOR);
     else if (r->kind == OK_PCT) *r->v = (*r->v + 1) % 11, m->garage_changed = 1, snd_menu(SND_CURSOR);    else optl_chip_set(m, r, IS_RES(r) ? !*r->v : (*r->v ? 1 : 0));
   }
   return 0;
@@ -2408,20 +2423,20 @@ static void draw_optlist(const menu_state *m, const orow *rows, int n, int sel, 
     for (int c = 0; c < (IS_SUB(o) ? 1 : 2); ++c) {
       float x, w;
       optl_chip(o, c, &x, &w);
-      int lit = o->kind == OK_MIP || o->kind == OK_PCT || IS_SUB(o) ? 1 : IS_RES(o) ? on == c : on == !c;
+      int lit = o->kind == OK_MIP || o->kind == OK_PCT || o->kind == OK_STEP || IS_SUB(o) ? 1 : IS_RES(o) ? on == c : on == !c;
       hud_ui_rect(x * k, (y - 0.5f * chip_h) * k, w * k, chip_h * k, lit ? 0.35f : 0.0f, lit ? 0.15f : 0.0f, 0.0f, lit ? 0.9f : 0.4f);
       if (lit) hud_ui_rect(x * k, (y + 0.5f * chip_h - 2.0f) * k, w * k, 2.0f, 1.0f, 0.42f, 0.05f, 1.0f);
-      const char *s = IS_SUB(o) ? (o->kind == OK_ACT ? "RUN" : "OPEN >") : o->kind == OK_MIP ? (c ? "SHARPER" : "SOFTER") : o->kind == OK_PCT ? (c ? "MORE" : "LESS") : o->kind == OK_WIN ? (c ? "FULLSCREEN" : "WINDOWED") : o->kind == OK_RES ? (m->res_phone ? (c ? "960 X 640" : "480 X 320") : (c ? "2048 X 1536" : "1024 X 768"))
+      const char *s = IS_SUB(o) ? (o->kind == OK_ACT ? "RUN" : "OPEN >") : o->kind == OK_MIP ? (c ? "SHARPER" : "SOFTER") : o->kind == OK_PCT || o->kind == OK_STEP ? (c ? "MORE" : "LESS") : o->kind == OK_WIN ? (c ? "FULLSCREEN" : "WINDOWED") : o->kind == OK_RES ? (m->res_phone ? (c ? "960 X 640" : "480 X 320") : (c ? "2048 X 1536" : "1024 X 768"))
                     : o->kind == OK_AA ? (c ? "2X" : "4X") : c ? "OFF" : "ON";
-      float px = o->kind == OK_MIP || IS_RES(o) || o->kind == OK_PCT ? 1.8f : chip_px;
+      float px = o->kind == OK_MIP || IS_RES(o) || o->kind == OK_PCT || o->kind == OK_STEP ? 1.8f : chip_px;
       hud_ui_text(s, (x + 0.5f * w) * k - 0.5f * hud_ui_text_width(s, px), y * k - 3.5f * px, px, 1, 1, 1, lit ? 1.0f : 0.45f);
     }
-    if (o->kind == OK_MIP || o->kind == OK_PCT) {
+    if (o->kind == OK_MIP || o->kind == OK_PCT || o->kind == OK_STEP) {
       float x, w;
       optl_chip(o, 1, &x, &w);
       char pct[8];
       snprintf(pct, sizeof pct, "%d%%", on * 10);
-      hud_ui_text(o->kind == OK_MIP ? MIP_NAME[on >= 0 && on < 4 ? on : 2] : pct, (x + w + 14.0f) * k, y * k - 3.5f * chip_px, chip_px, 1, 0.55f, 0.15f, 1);
+      hud_ui_text(o->kind == OK_STEP ? o->names[on >= 0 && on <= o->max ? on : 0] : o->kind == OK_MIP ? MIP_NAME[on >= 0 && on < 4 ? on : 2] : pct, (x + w + 14.0f) * k, y * k - 3.5f * chip_px, chip_px, 1, 0.55f, 0.15f, 1);
     }
   }
   hud_ui_text(rows[sel].note, 20.0f * k, 380.0f * k, 1.7f, 0.85f, 0.85f, 0.85f, 1);
@@ -7607,7 +7622,7 @@ void menu_init(menu_state *m) {
   m->rum[0] = 8, m->rum[1] = 10, m->rum[2] = 10, m->rum[3] = 5, m->cam_shake = 10, m->smooth_on = 1, m->key_alpha = 10;
   m->mip = 2;
   /* (the SSAO off: its 20 ms on the Mi 6 cost the 60 fps) */
-  m->hd_tex = 1, m->bloom_on = 0, m->ssao_on = 0, m->wet_on = 0, m->paint_on = 1, m->aa4 = 0;
+  m->hd_tex = 1, m->bloom_on = 0, m->ssao_on = 0, m->wet_on = 0, m->paint_on = 1, m->aa4 = 0, m->aa_mode = 1, m->rscale = 6;
   m->garage_changed = 0;
   m->game = MENU_GAME_TA;
   m->story_sel = -1;

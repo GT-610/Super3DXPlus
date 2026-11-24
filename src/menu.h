@@ -221,6 +221,7 @@ typedef struct {
    * occlusion, the wet road, the paint's reflection and the anti-aliasing (4x 1, 2x 0, from
    * the next start) */
   int ctl_touch; /* the last input was a touch (menu_touch) and not a pad or key (menu_action): the CONTROLS screen shows the touch controls */
+  int aa_mode, rscale; /* (ANTI-ALIASING 0 off, 1 2X, 2 4X; RESOLUTION SCALE's step 0..6, MENU_RSCALE) */
   int hq_rows, hd_tex, bloom_on, ssao_on, wet_on, paint_on, aa4, milage_on; /* (paint_on: the paint's clear coat, now the REFLECTION row's, over_on) */
   /* and on an iPad (res_row, set by the app), the screen's resolution: 1024x768 (0) or the
    * Retina iPads' 2048x1536 (1), from the next start (main.m reads it from the options) */
@@ -801,3 +802,5 @@ void menu_draw(const menu_state *m, float screen_w, float screen_h, void (*draw3
                int (*mini3d)(void *, float));
 
 #endif
+
+extern const float MENU_RSCALE[7];
