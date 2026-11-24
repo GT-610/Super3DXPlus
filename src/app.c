@@ -410,7 +410,7 @@ static const float START[CAR_COURSES][3] = {
 };
 
 /* the build, for telling the pushes apart in perf.log */
-#define PORT_BUILD "push164"
+#define PORT_BUILD PORT_VERSION /* (menu.h) */
 #define PHONE_TRAFFIC_FAR 3000.0f /* an iPhone draws the traffic this near (0.1 m, as G.rp.range) */
 
 /* the app's resident memory in MB (iOS 6 warns the app around 300 to 400 on the iPad 3) */

@@ -475,8 +475,12 @@ def steps(ctx):
     for city in ("oosaka", "hakone", "nagoya", "fukuoka"):
         for tod in ("daytime", "night"):
             st.append(("%s-%s" % (city, tod), 1800, py("tools/stage/pack_city.py", d, city, tod, "data")))
-    st += [("lights", 1800, py("tools/stage/pack_lights.py", d, "data")),
-           ("neon", 1800, py("tools/stage/pack_neon.py", d, "data/neon.wpk")),
+    # (the street and building lights of the other cities, lights_<city>.bin, from each city's scene; Hakone has none: without them Osaka, Nagoya and Fukuoka had no street lights)
+    city_lights = (("oosaka", "streetlight_distribution_osaka", "buildinglight_distribution_ok"), ("nagoya", "streetlight_distribution_nk", "buildinglight_distribution_nk"),
+                   ("fukuoka", "streetlight_distribution_fk", "buildinglight_distribution_fk"))
+    st += [("lights", 1800, py("tools/stage/pack_lights.py", d, "data"))]
+    st += [("lights-" + c, 1800, py("tools/stage/pack_lights.py", d, "data", c, "effect/%s.igb" % sf, "effect/%s.igb" % bf)) for c, sf, bf in city_lights]
+    st += [("neon", 1800, py("tools/stage/pack_neon.py", d, "data/neon.wpk")),
            ("cars", 3600, py("tools/stage/pack_cars.py", view, "data/cars"))]
     for a in "abc":
         st.append(("cars-aero-" + a, 3600, py("tools/stage/pack_cars.py", view, "data/cars", "--aero", a)))

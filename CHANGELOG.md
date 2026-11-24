@@ -2,6 +2,24 @@
 
 What Super3DX+ adds or changes compared with [Re3DX+](NOTICE.md). Longer explanations are in `docs/`.
 
+## 1.0.0
+
+The first numbered release. Everything below the next heading is the feature list; this is what is new since the last update.
+
+**Updating needs the data converted again** (about an hour: the setup does it by itself and copies your saves across). The menu data changed: the commas in story dialogue, the tuning card's colour row, and the title glyph numbers. Android and the Raspberry Pi need `setup-android` / `setup-pi` run again afterwards. **Online versus: everyone in a room must be on this version** (the protocol is 172).
+
+- **macOS** (thanks to GT-610's pull request #43): the same game on Apple silicon (an Intel Mac should work too, untested) over OpenGL 2.1 (`build.py --target macos`, `setup.sh`). The packaged `Super3DX+.app` holds the player and the data, so it can go in Applications; its saves are in `~/Library/Application Support/Super3DX+/save`. The loading thread is on by default there (BACKGROUND LOADING in the debug options turns it off).
+- **Time attack records you can share** (`docs/RECORDS.md`): the ranking lives in a `records` folder in the save folder. Your runs are in `records/my-times.rec`; any other file put in the folder is merged into the ranking and the course record, with the game running. Your personal bests are in `records/card<n>.dat`. The files are packed and checked, so a time cannot be typed in by hand. Your old `ranking` and `records<n>` files are read once.
+- **Story and 10-in-a-row:** the end sequence (the TIME row, the win streak animation, the mileage after the tuning work, the tuning install animation); the gear is kept through a story select's second race and a cutscene's restart (issue 41); a 10-in-a-row restart is no longer money-shifted; the commas in story dialogue, the tuning card's colour row and the title glyphs are right (the "C S" title, issue 38, with the data converted again).
+- **First-person (bumper) view** is the arcade's own camera in smooth motion too, as at 60 Hz; the 10-in-a-row restarts no longer throw it off the road.
+- **New options:** ANTI-ALIASING OFF (with 2X and 4X), RESOLUTION SCALE (50% to 100%), the touch controls' BUTTON OPACITY, and on the Mac BACKGROUND LOADING. The quality governor has two more resolution steps for weak GPUs (issue 32).
+- **Versus:** a player's READY and AUTO READY work with the mouse and touch (issue 26); the race time is longer for longer races; the pilot drives while you are in the pause menu; joining, leaving and crashing have sounds; another player's two-line title is two lines in the player box.
+- **Android:** the APK build retries `zipalign` and falls back (issue 44); a phone is asked for a high refresh rate in a way it accepts (issue 36).
+- **Street lights:** the conversion now makes the street and building lights of Osaka, Nagoya and Fukuoka (`lights_<city>.bin`). A build from the setup had none there: only Tokyo's were made.
+- **Smaller:** `--save` makes its folder when it is missing; `build.py package` keeps the saves it finds; the INFORMATION screen shows the version.
+
+## What it has (the whole list)
+
 ## Input and menus
 
 - Controller-first menus: full pad and keyboard control on every screen, with rebindable keys, pad buttons and analog axes

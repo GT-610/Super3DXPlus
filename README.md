@@ -140,6 +140,7 @@ Only tested on a Raspberry Pi 5 (8 GB). Other models should work with simple con
 
 **Oversights:**
 - The Japan build has been tested much less than the Export build, because I can't read Japanese. Please submit an issue if you encounter any issues with the text, with as much information as possible.
+- macOS has only been tested on Apple silicon (an M2 MacBook Air, macOS 13); an Intel Mac should build it but is untested. The `.app` is unsigned and links the SDL2 the Mac was built with, so it is for the Mac that built it (right-click > Open the first time if it is blocked).
 - Story mode has not been played all the way through yet, so it is unknown if any bugs come up in certain story mode missions.
 
 **Maybe later (NOT planned atm. Just possibly could be added down the line):**
