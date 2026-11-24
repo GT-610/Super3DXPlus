@@ -422,15 +422,26 @@ def package(target):
         p = os.path.join(pk, "play.sh")
         open(p, "w", newline="\n").write('#!/bin/sh\ncd "$(dirname "$0")"\nmkdir -p save\nexec ./super3dx data --save save "$@"\n')
         os.chmod(p, 0o755)
-        if target == "macos":  # (a .command starts in the terminal; the .app opens like any other Mac app)
-            cmd = os.path.join(pk, "play.command")
-            shutil.copyfile(p, cmd)
-            os.chmod(cmd, 0o755)
+        if target == "macos":  # (the .app holds the player and the data, so it can be moved anywhere, into Applications too; its saves are in ~/Library/Application Support/Super3DX+/save)
+            os.remove(p)
+            os.remove(os.path.join(pk, "super3dx"))
             app = os.path.join(pk, "Super3DX+.app", "Contents")
             os.makedirs(os.path.join(app, "MacOS"))
+            os.makedirs(os.path.join(app, "Resources"))
+            shutil.copy(exe, os.path.join(app, "MacOS", "super3dx"))
+            os.chmod(os.path.join(app, "MacOS", "super3dx"), 0o755)
             open(os.path.join(app, "MacOS", "super3dx-launcher"), "w", newline="\n").write(
-                '#!/bin/sh\ncd "$(dirname "$0")/../../.."\nmkdir -p save\nexec ./super3dx data --save save "$@"\n')
+                '#!/bin/sh\n'
+                '# the player and the data are inside this app: it can be put anywhere. The saves are in ~/Library/Application Support/Super3DX+/save\n'
+                'D="$(cd "$(dirname "$0")" && pwd)"\n'
+                'S="$HOME/Library/Application Support/Super3DX+/save"\n'
+                'mkdir -p "$S"\n'
+                'cd "$D/../Resources"\n'
+                'exec "$D/super3dx" data --save "$S" "$@"\n')
             os.chmod(os.path.join(app, "MacOS", "super3dx-launcher"), 0o755)
+            cmd = os.path.join(pk, "play.command")  # (a .command starts in the terminal, the same game and saves)
+            open(cmd, "w", newline="\n").write('#!/bin/sh\nexec "$(dirname "$0")/Super3DX+.app/Contents/MacOS/super3dx-launcher" "$@"\n')
+            os.chmod(cmd, 0o755)
             open(os.path.join(app, "Info.plist"), "w", newline="\n").write(
                 '<?xml version="1.0" encoding="UTF-8"?>\n'
                 '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
@@ -446,12 +457,13 @@ def package(target):
                 '  <key>LSMinimumSystemVersion</key><string>10.13</string>\n'
                 '</dict></plist>\n')
     say("copying data/ (it is large)...")
-    shutil.copytree(data, os.path.join(pk, "data"))
+    shutil.copytree(data, os.path.join(pk, "Super3DX+.app", "Contents", "Resources", "data") if target == "macos" else os.path.join(pk, "data"))
     open(os.path.join(pk, "README.txt"), "w").write(
         "Super3DX+ (see the project's README): the player and the game's data, converted from your own copy of the arcade game.\n"
         "For personal use: the data is the arcade's, do not share it.\n" +
-        ("macOS: double-click Super3DX+.app (or run play.command in a terminal). It needs Homebrew's SDL2 (brew install sdl2): "
-         "the player links it from /opt/homebrew.\n" if target == "macos" else ""))
+        ("macOS: double-click Super3DX+.app (or run play.command in a terminal). The app holds the player and the data, so it can be moved or put in Applications; "
+         "your saves are in ~/Library/Application Support/Super3DX+/save (they stay when the app is replaced). The player links the SDL2 it was built with "
+         "(Homebrew's or your own build), which this Mac has: the app is for this Mac.\n" if target == "macos" else ""))
     if kept:
         shutil.move(os.path.join(kept, "save"), os.path.join(pk, "save"))
         os.rmdir(kept)
