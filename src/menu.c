@@ -2712,8 +2712,12 @@ static void draw_portinfo(const menu_state *m, int clock, int bars, float screen
   float y = 92.0f;
   for (int i = 0; i < (int)(sizeof lines / sizeof *lines); i++, y += 20.0f) {
     const char *s = lines[i];
-    if (*s == '#') hud_ui_text(s + 1, 24.0f * k, y * k, 2.9f, 1.0f, 0.55f, 0.15f, 1);
-    else hud_ui_text(s, 24.0f * k, y * k, 2.2f, 0.9f, 0.9f, 0.9f, 1);
+    if (*s == '#') {
+      float end = hud_ui_text(s + 1, 24.0f * k, y * k, 2.9f, 1.0f, 0.55f, 0.15f, 1);
+      if (i == 0) hud_ui_text("SUPER3DX+ Ver. " PORT_VERSION, end + 14.0f * k, y * k + 5.0f, 2.2f, 1.0f, 1.0f, 1.0f, 1); /* (the version, beside the first heading) */
+    } else {
+      hud_ui_text(s, 24.0f * k, y * k, 2.2f, 0.9f, 0.9f, 0.9f, 1);
+    }
   }
   hud_ui_end();
 }

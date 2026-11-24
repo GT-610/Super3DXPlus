@@ -77,6 +77,7 @@ typedef struct {
 
 /* The time attack ranking, the machine's (every save's runs): per course (the time attack slot, 0..14) the best runs, fastest first,
  * for the attract loop's ranking screen, the result's place and the console's RECORD TIME. */
+#define PORT_VERSION "1.0.0" /* the release's version, shown on the INFORMATION screen (and in CHANGELOG.md's heading) */
 #define MENU_RANK_COURSES 15
 #define MENU_RANK_KEEP 30
 typedef struct {
