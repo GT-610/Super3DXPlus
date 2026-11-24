@@ -1101,8 +1101,10 @@ static void shake_from(const float in[3], float out[3]) {
   for (int k = 0; k < 3; ++k) out[k] = SF[0][k] * in[0] + SF[1][k] * in[1] + SF[2][k] * in[2];
 }
 
+#define SHAKE_PASS 3.0f /* (units: about 40 cm) */
+#define SHAKE_STOP 7.0f
 static void shake_filter(car_state *c) {
-  if (shake_tenths >= 10 || M32(STATE) >= 4) { /* (and no smoothing once the race is over, play states 4 and up: the finish's cameras are the arcade's own moves around the car, and a filter that follows it a fifth of a second late only makes it wobble; issue 41) */
+  if ((shake_tenths >= 10 && !shake_slow) || M32(STATE) >= 4) { /* (and no smoothing once the race is over, play states 4 and up: the finish's cameras are the arcade's own moves around the car, and a filter that follows it a fifth of a second late only makes it wobble; issue 41) */
     SK.on = 0;
     return;
   }
@@ -1189,7 +1191,14 @@ static void shake_filter(car_state *c) {
   }
   if (!far) far_n = 0;
   float a = shake_slow ? 0.02f : 0.1f; /* (a step is 1/60 s: 0.1 of the way is a time constant of about 0.16 s) */
-  float s = shake_slow ? 0.0f : shake_tenths / 10.0f;
+  float s = shake_tenths / 10.0f;
+  if (shake_slow) {
+    /* smooth motion's first-person view keeps the arcade's shake, as the 60 Hz game has it, by the CAMERA SHAKE option: the camera's moves about the lock's rest place are let through (the bumps, the
+     * engine's and the road's tremble), but not the swings of a few metres the roof camera makes now and then at speed (the black box: 2 to 6 m fore and aft for a step or a few), which
+     * are let through less the further they are and not at all past a limit */
+    const float dist = sqrtf(d);
+    s *= dist < SHAKE_PASS ? 1.0f : dist > SHAKE_STOP ? 0.0f : (SHAKE_STOP - dist) / (SHAKE_STOP - SHAKE_PASS);
+  }
   if (shake_slow) {
     /* smooth motion's first-person view: the eye is held on the car's body. The arcade's roof camera is not rigid on it: at the same places of a course (the spawn, a bend) it swings
      * 2 m or more forward and back of the eye's rest place, over a few steps, which a slow filter only spreads out. So the rest place is learned (slowly, from the samples that are near it)
