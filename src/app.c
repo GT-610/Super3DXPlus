@@ -5774,7 +5774,7 @@ void app_frame(float dt) {
   pend_up |= in.shift_up, pend_down |= in.shift_down;
   if (in.gear) pend_gear = in.gear;
   in.shift_up = pend_up, in.shift_down = pend_down, in.gear = pend_gear;
-  { static int ev = -2; if (ev == -2) ev = getenv("MT3DX_SHAKE") ? atoi(getenv("MT3DX_SHAKE")) : -1; int sh = ev >= 0 ? ev : G.menu.cam_shake; /* (smooth motion's roof view holds the eye on the car, and lets the arcade's shake through by this option, less its big swings: car.c shake_filter) */ car_shake(sh), car_shake_slow(ev < 0 && G.interp && G.camera); } /* (MT3DX_SHAKE=n: this run's camera shake, whatever the option says) */
+  { static int ev = -2; if (ev == -2) ev = getenv("MT3DX_SHAKE") ? atoi(getenv("MT3DX_SHAKE")) : -1; int sh = ev >= 0 ? ev : G.menu.cam_shake; /* (the roof view is the arcade's own camera in smooth motion too: not blended between steps (interp_alpha below), and not held on the car, so its shake is as at 60 Hz, by this option) */ car_shake(sh), car_shake_slow(0); } /* (MT3DX_SHAKE=n: this run's camera shake, whatever the option says) */
   if (G.flash_on && (!G.vs_race || (G.car.lamp_tick - G.flash_t0) / 6 >= 6)) G.flash_on = 0; /* (three blinks of 0.2 s: off 0.1 s, on 0.1 s) */
   in.flash = G.flash_on && !G.paused && ((G.car.lamp_tick - G.flash_t0) / 6) % 2 == 0;
   for (int i = 0; i < steps; ++i) {
@@ -5970,7 +5970,7 @@ void app_frame(float dt) {
   double t1 = now_ms();
 
   /* smooth motion: the poses drawn are the blend between the last two steps (put back below) */
-  G.interp_alpha = G.interp && pose_prev_ok && !G.paused && !frozen && !G.goal_hold ? G.interp_acc : 1.0f; /* (a movie's cameras and cars too: its cuts are jumps, left as they are) */
+  G.interp_alpha = G.interp && pose_prev_ok && !G.paused && !frozen && !G.goal_hold && !G.camera ? G.interp_acc : 1.0f; /* (the roof view, camera 1, is drawn at each step as it is: the arcade's camera, shake and all, which blending and the lock on the car both took away or made jump) */ /* (a movie's cameras and cars too: its cuts are jumps, left as they are) */
   if (G.interp_alpha < 1.0f) {
     car_pose blended;
     pose_get(&G.car, &pose_real);
