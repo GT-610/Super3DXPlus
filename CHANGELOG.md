@@ -2,6 +2,10 @@
 
 What Super3DX+ adds or changes compared with [Re3DX+](NOTICE.md). Longer explanations are in `docs/`.
 
+## Unreleased
+
+- **The opposite carriageway has its traffic again** (issue 45): the arcade's own second traffic system (`yt::COnComerManager`, six slots on the far side of the divider) is wired into the port, so divided roads have cars coming the other way again, as on the arcade (and as Re3DX+ had lost too). Courses without a divided road (Nagoya, Osaka, Hakone) stay as they were, and the player's physics are bit for bit unchanged. The update is a usual one: the setup rebuilds the game program in a few minutes; the converted data and the saves are not touched.
+
 ## 1.0.0
 
 The first numbered release. Everything below the next heading is the feature list; this is what is new since the last update.
