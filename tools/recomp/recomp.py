@@ -77,6 +77,9 @@ STUB_IMPL = {
     # the traffic's display models: rc_other_setup(slot, ECarType) / rc_other_free(slot) in the port
     "_ZN16clCarDispManager13setupOtherCarEii": "eax = (eax & 0xffffff00u) | (rc_other_setup(M32(esp + 8), M32(esp + 12)) & 0xff);",
     "_ZN16clCarDispManager12freeOtherCarEi": "rc_other_free(M32(esp + 8)); eax = 0;",
+    # the opposite carriageway's traffic (yt::COnComerManager's display models), the same way
+    "_ZN16clCarDispManager15setupOnComerCarEii": "eax = (eax & 0xffffff00u) | (rc_oncomer_setup(M32(esp + 8), M32(esp + 12)) & 0xff);",
+    "_ZN16clCarDispManager14freeOnComerCarEi": "rc_oncomer_free(M32(esp + 8)); eax = 0;",
     # the cabinet link under yt::CLinx (clNet's race packets in the arcade): the port's transport
     "_Z7Receivev": "rc_link_receive(); eax = 0;",
     "_Z12GetSelfPcbIdv": "eax = rc_link_pcb;",

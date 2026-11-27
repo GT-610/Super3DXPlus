@@ -17,6 +17,7 @@ void f_8983f64(void); /* yt::CSeq::Exec(std::auto_ptr<clGameInput> const&) */
 void f_89a2584(void); /* yt::CElapse::Init */
 void f_89a2548(void); /* yt::CElapse::SetByMul */
 void f_89825a8(void); /* yt::CSeq::GetInfoOtherCarDisp */
+void f_8982630(void); /* yt::CSeq::GetInfoOnComerDisp */
 void f_89b45d0(void); /* yt::CMachine::GetInfoCarDisp */
 void f_89b410c(void); /* yt::CMachine::GetInfoCarEffect */
 void f_89ce5a4(void); /* yt::CTire::GetForce(yt::STireInput const&) const, for car_phys */
@@ -87,6 +88,8 @@ void f_89fdfe8(void); /* clMovieSystem::GetRTMovieCarDisp(int, SInfoCarDisp *) *
 /* CSeq's globals */
 #define MACHINE_PTR RCA(98028e4)   /* CMachine */
 #define OTHER_GEN_PTR RCA(9802894) /* COtherGen, the traffic */
+#define ONCOMER_PTR RCA(980286c)   /* COnComerManager, the opposite carriageway's traffic */
+#define ONCOMER_TYPE0 42u          /* setupOnComerCar's ECarType is the traffic's own (42..45) */
 #define LX_RIVALS RCA(980289c)     /* yt::CLxRival *[3]: a versus' link cars (rivals 1..3) */
 #define COUNTDOWN RCA(9802a68)     /* CState: seconds of countdown left (Prep_CountDown sets 4) */
 #define TIME_KEEPER_PTR RCA(98028c8) /* CTimeKeeper, the checkpoints (the first is the start, the last the goal) */
@@ -172,12 +175,13 @@ static struct {
   char image[1024], config[1024];
   int course;
   car_spec spec;
-  uint32_t m, gen, gin, gin_ptr, disp, eff, cam, mirror, jct, info_race, info_map, info_sign, info_jct, jct_line, lines, ten_line;
+  uint32_t m, gen, oc, gin, gin_ptr, disp, odisp, eff, cam, mirror, jct, info_race, info_map, info_sign, info_jct, jct_line, lines, ten_line;
   float jct_saved[3][3];
   int jct_prev;
   int view;
   int manual, lever, top_lever; /* lever 0..gears-1, -1 = neutral */
   int traffic_model[CAR_TRAFFIC];
+  int oncomer_model[CAR_ONCOMER];
   int has_rival, n_rival;
   int ten_stage, ten_level; /* car_set_ten: the 10-in-a-row's EStage (0: not one) and level */
   int n_ten;
@@ -788,6 +792,16 @@ static int on_other_setup(uint32_t slot, uint32_t type) {
   return 1;
 }
 
+/* clCarDispManager::setupOnComerCar: a car comes on the opposite carriageway; its model. The arcade's
+ * COnComerManager hands the display the same ECarType 42..45 as the traffic's own generator does. */
+static int on_oncomer_setup(uint32_t slot, uint32_t type) {
+  int i = (int)slot;
+  if (i >= 0 && i < CAR_ONCOMER) P.oncomer_model[i] = type - ONCOMER_TYPE0 < 4 ? TRAFFIC_MODEL[type - ONCOMER_TYPE0] : 0;
+  return 1;
+}
+
+static void on_oncomer_free(uint32_t slot) { (void)slot; }
+
 static void first_frame(car_state *c);
 static int phys_have; /* read_phys has a last frame's velocity to work from */
 
@@ -892,6 +906,9 @@ int car_start(car_state *c, int course, int manual, const car_spec *spec) {
     if (P.ten[i].character >= 0 && P.ten[i].character < 32) W32(RCA(9778fc0) + 4u * (uint32_t)P.ten[i].character, P.ten[i].type);
   rc_on_hook = on_hook;
   rc_on_other_setup = on_other_setup;
+  rc_on_oncomer_setup = on_oncomer_setup;
+  rc_on_oncomer_free = on_oncomer_free;
+  memset(P.oncomer_model, 0, sizeof P.oncomer_model);
   /* a time attack with the traffic on, as with the arcade's hidden button held at the course select */
   uint32_t cfg = rc_alloc(0x200);
   W32(cfg + CFG_CAR, P.spec.type);
@@ -986,10 +1003,12 @@ int car_start(car_state *c, int course, int manual, const car_spec *spec) {
    * 4 s) has the pilot drive, then the race runs with the car in the player's hands */
   P.m = M32(MACHINE_PTR);
   P.gen = M32(OTHER_GEN_PTR);
+  P.oc = M32(ONCOMER_PTR);
   P.gin = rc_alloc(0x40);
   P.gin_ptr = rc_alloc(4);
   W32(P.gin_ptr, P.gin);
   P.disp = rc_alloc(0x260);
+  P.odisp = rc_alloc(0x100);
   P.eff = rc_alloc(0x100);
   P.cam = rc_alloc(0x100);
   P.mirror = rc_alloc(0x100);
@@ -1525,6 +1544,21 @@ static void read_traffic(car_state *c) {
   }
 }
 
+/* What the opposite carriageway shows this frame (issue 45): the six cars COnComerManager has on
+ * the other side of the road (CSeq::GetInfoOnComerDisp; its SInfoOnComerDisp begins with the body
+ * matrix, no ECarType word before it as SInfoCarDisp has). Its cars never reach this side: the
+ * arcade only hands the display where each is, so neither does the port. */
+static void read_oncomer(car_state *c) {
+  c->n_oncomer = 0;
+  for (int i = 0; P.oc && i < CAR_ONCOMER; i++) {
+    if (!(call(f_8982630, 2, (uint32_t)i, P.odisp) & 0xff)) continue;
+    car_oncomer *o = &c->oncomer[c->n_oncomer++];
+    o->slot = i;
+    o->model = P.oncomer_model[i];
+    memcpy(o->body, VA(P.odisp), sizeof o->body);
+  }
+}
+
 /* The rivals (CSeq::GetInfoRivalCarDisp, rivals 1..): off the road (out of reach) it says so. */
 static void read_rival(car_state *c) {
   for (int i = 0; i < CAR_RIVALS; ++i) {
@@ -1581,6 +1615,9 @@ float car_movie_start(car_state *c, int id, const car_spec *player, const car_ri
   car_set_rivals(rivals, n);
   rc_on_hook = on_hook;
   rc_on_other_setup = on_other_setup;
+  rc_on_oncomer_setup = on_oncomer_setup;
+  rc_on_oncomer_free = on_oncomer_free;
+  memset(P.oncomer_model, 0, sizeof P.oncomer_model);
   P.ten_stage = 0;
   uint32_t rival_type[CAR_RIVALS] = { 0 };
   for (int i = 0; i < P.n_rival; ++i) rival_type[i] = P.rival[i].type;
@@ -1593,11 +1630,13 @@ float car_movie_start(car_state *c, int id, const car_spec *player, const car_ri
   call(f_89a2548, 1, fbits(1.0f));
   P.m = M32(MACHINE_PTR);
   P.gen = M32(OTHER_GEN_PTR);
+  P.oc = M32(ONCOMER_PTR);
   P.gin = rc_alloc(0x40);
   P.gin_ptr = rc_alloc(4);
   W32(P.gin_ptr, P.gin);
   W32(P.gin + 0x14, 0xffffffffu);
   P.disp = rc_alloc(0x260);
+  P.odisp = rc_alloc(0x100);
   P.cam = rc_alloc(0x100);
   P.mirror = 0;
   movie = ms;
@@ -1737,6 +1776,7 @@ static void first_frame(car_state *c) {
   read_camera(c);
   read_jct_blocks(c);
   read_traffic(c);
+  read_oncomer(c);
   read_rival(c);
 #ifdef WMMT_EGL
   if (getenv("WMMT_TA_GOAL")) { /* test: the checkpoints and the goal (car_start) within this many m */
@@ -1936,6 +1976,7 @@ void car_update(car_state *c, const car_input *in) {
   read_camera(c);
   read_jct_blocks(c);
   read_traffic(c);
+  read_oncomer(c);
   read_rival(c);
   rival_impacts(c);
   read_race(&c->race);

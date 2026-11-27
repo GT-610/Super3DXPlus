@@ -13,6 +13,8 @@ uint32_t rc_rand_seed;
 void (*rc_on_hook)(uint32_t at);
 int (*rc_on_other_setup)(uint32_t slot, uint32_t car_type);
 void (*rc_on_other_free)(uint32_t slot);
+int (*rc_on_oncomer_setup)(uint32_t slot, uint32_t car_type);
+void (*rc_on_oncomer_free)(uint32_t slot);
 uint32_t rc_link_pcb, rc_link_tx, rc_link_rx;
 void (*rc_on_link_receive)(void);
 void (*rc_on_link_send)(void);

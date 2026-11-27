@@ -5149,6 +5149,16 @@ static void draw_race_cars(const car_state *c, const mat4 *vp, const float *eye_
     eye_in(&m, eye_pos, eye);
     if (G.traffic[t->model].n_batch) wpk_draw(&G.traffic[t->model], vp, &m, eye, pass, rp);
   }
+  /* the opposite carriageway's cars (issue 45): the same models, drawn as the traffic's are */
+  for (int i = 0; i < c->n_oncomer; ++i) {
+    const car_oncomer *o = &c->oncomer[i];
+    mat4 m;
+    memcpy(m.m, o->body, sizeof m.m);
+    if (far > 0.0f && !near_eye(m.m, eye_pos, far)) continue;
+    float eye[3];
+    eye_in(&m, eye_pos, eye);
+    if (G.traffic[o->model].n_batch) wpk_draw(&G.traffic[o->model], vp, &m, eye, pass, rp);
+  }
   rp->over_glass = 0;
   /* the cars' environment map is the frame itself, as it stands before the player's own car (the arcade's upper-screen comment: "or it would see
    * itself"): the street, the rivals, the traffic; the own car then reads it. (With render_hq it is the last frame, render_blur_begin.) */
@@ -5275,8 +5285,8 @@ static void draw_backmirror(const car_state *c, int movie) {
 
 /* the player's car's and the traffic's shadows, onto what the opaque passes drew */
 static void draw_shadows(const mat4 *vp, const mat4 *car_m) {
-  const wpk_scene *s[2 + CAR_TRAFFIC];
-  mat4 mvp[1 + CAR_RIVALS + CAR_TRAFFIC];
+  const wpk_scene *s[2 + CAR_TRAFFIC + CAR_ONCOMER];
+  mat4 mvp[1 + CAR_RIVALS + CAR_TRAFFIC + CAR_ONCOMER];
   int n = 0;
   const car_state *c = &G.car;
   if (CAM_CHASE() && G.race_model) {
@@ -5288,11 +5298,17 @@ static void draw_shadows(const mat4 *vp, const mat4 *car_m) {
       s[n] = G.rival_model[i];
       shadow_of(vp, c->rival_body[i], &mvp[n++]);
     }
-  for (int i = 0; i < c->n_traffic && n < 1 + CAR_RIVALS + CAR_TRAFFIC; ++i) {
+  for (int i = 0; i < c->n_traffic && n < 1 + CAR_RIVALS + CAR_TRAFFIC + CAR_ONCOMER; ++i) {
     const car_traffic *t = &c->traffic[i];
     if (!G.traffic[t->model].n_batch) continue;
     s[n] = &G.traffic[t->model];
     shadow_of(vp, t->body, &mvp[n++]);
+  }
+  for (int i = 0; i < c->n_oncomer && n < 1 + CAR_RIVALS + CAR_TRAFFIC + CAR_ONCOMER; ++i) {
+    const car_oncomer *o = &c->oncomer[i];
+    if (!G.traffic[o->model].n_batch) continue;
+    s[n] = &G.traffic[o->model];
+    shadow_of(vp, o->body, &mvp[n++]);
   }
   render_shadows(s, mvp, n, &G.rp);
 }

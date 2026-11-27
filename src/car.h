@@ -25,6 +25,15 @@ typedef struct {
   float body[16]; /* model matrix, like car_state.body */
 } car_traffic;
 
+/* the opposite carriageway's traffic (yt::COnComerManager): the same models, six slots, and
+ * no AI of its own on the arcade's CPU (the port draws only what the arcade hands it) */
+#define CAR_ONCOMER 6
+typedef struct {
+  int slot;       /* COnComerManager's own 0..5 (kept: its cars come and go by it) */
+  int model;      /* CAR_TRAFFIC_* */
+  float body[16]; /* model matrix, like car_state.body */
+} car_oncomer;
+
 /* A car scraping a wall (SInfoCarEffect, CMachine/CRivalCar::GetInfoCarEffect): how hard
  * (+0x68, 0 when clear; clCarEffectManager::update throws sparks while it is not 0), the
  * contact point (+0x6c, world) and the way they fly (+0x78) */
@@ -185,6 +194,8 @@ typedef struct {
   int jct_block[2];   /* junction blocks to show (ids for car_jct_block_name, 0 = none) */
   int n_traffic;      /* the traffic cars on the road this frame */
   car_traffic traffic[CAR_TRAFFIC];
+  int n_oncomer;      /* the opposite carriageway's cars this frame (issue 45) */
+  car_oncomer oncomer[CAR_ONCOMER];
   /* the rivals (car_set_rivals), each: on the road near enough to draw, and its model matrix
    * like body (CSeq::GetInfoRivalCarDisp) */
   int rival_shown[CAR_RIVALS];

@@ -197,6 +197,14 @@ static inline uint32_t rc_other_setup(uint32_t slot, uint32_t type) {
   return rc_on_other_setup ? (uint32_t)rc_on_other_setup(slot, type) : 1u;
 }
 static inline void rc_other_free(uint32_t slot) { if (rc_on_other_free) rc_on_other_free(slot); }
+/* The opposite carriageway's traffic (yt::COnComerManager): the same kind of display-side calls
+ * as the traffic's, but its own six slots 0..5 (an unset hook succeeds, as with the traffic). */
+extern int (*rc_on_oncomer_setup)(uint32_t slot, uint32_t car_type);
+extern void (*rc_on_oncomer_free)(uint32_t slot);
+static inline uint32_t rc_oncomer_setup(uint32_t slot, uint32_t type) {
+  return rc_on_oncomer_setup ? (uint32_t)rc_on_oncomer_setup(slot, type) : 1u;
+}
+static inline void rc_oncomer_free(uint32_t slot) { if (rc_on_oncomer_free) rc_on_oncomer_free(slot); }
 /* The cabinet link (yt::CLinx: the versus race), clNet's side: rc_link_pcb this machine's PCB id,
  * rc_link_tx the race packet it sends (SLxPacket, 0x278 bytes in a 0x400 buffer) and rc_link_rx the
  * last received from each PCB (4 x 0x400, clNet +0x38a4); rc_on_link_receive refreshes them
